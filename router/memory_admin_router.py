@@ -104,8 +104,8 @@ class VNextMemoryAdminRouter(BaseRouter):
     """提供 loopback 限定的只读记忆档案页。"""
 
     name = "memory_admin"
-    description = "Engram Memory vNext 本地记忆档案页"
-    custom_route_path = "/engram-memory"
+    description = "Mnemosyne Memory vNext 本地记忆档案页"
+    custom_route_path = "/mnemosyne-memory"
     cors_origins = None
 
     def __init__(self, plugin: BasePlugin) -> None:
@@ -117,7 +117,7 @@ class VNextMemoryAdminRouter(BaseRouter):
         # runtime_owner 是插件启动时动态附加的运行时字段，BasePlugin 不定义此属性。
         owner = getattr(self.plugin, "runtime_owner", None)
         if not isinstance(owner, VNextRuntimeOwner):
-            raise HTTPException(status_code=503, detail="Engram vNext Runtime 尚未就绪")
+            raise HTTPException(status_code=503, detail="Mnemosyne vNext Runtime 尚未就绪")
         return owner
 
     @staticmethod

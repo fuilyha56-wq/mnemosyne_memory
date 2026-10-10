@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-REMINDER_NAME = "engram_memory_chat_diary"
+REMINDER_NAME = "mnemosyne_memory_chat_diary"
 _WRAPPED_PREFIX = f"<system_reminder>\n[{REMINDER_NAME}]\n"
 _RAW_PREFIX = f"[{REMINDER_NAME}]\n"
 _WRAPPED_SUFFIX = "\n</system_reminder>"

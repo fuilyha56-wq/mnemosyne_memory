@@ -335,7 +335,7 @@ async def test_change_event_keeps_params_and_only_enqueues(
     params = {"change": change}
     decision, result = await runtime_components.VNextMemoryChangedEventHandler.execute(
         cast(Any, handler),
-        "engram_memory:memory_changed",
+        "mnemosyne_memory:memory_changed",
         params,
     )
     assert decision is runtime_components.EventDecision.SUCCESS

@@ -23,7 +23,7 @@ from src.kernel.llm.roles import ROLE
 from ..diary.events import ChatDiaryEventHandler
 from ..diary.injection import REMINDER_NAME, refresh_diary_payloads
 from ..diary.runtime import DiaryRuntime
-from ..config import EngramMemoryConfig
+from ..config import MnemosyneMemoryConfig
 from ..vnext.flashback_service import FlashbackCandidate
 from ..vnext.runtime_components import VNextFlashbackEventHandler
 
@@ -151,7 +151,7 @@ def test_diary_stays_at_tail_while_flashback_remains_in_history(
 
     stream_id = "stream-a"
     candidate = FlashbackCandidate("memory-example", "旧安排", "时间还没定。", "安排")
-    name = f"engram_memory_flashback_{candidate.memory_id}"
+    name = f"mnemosyne_memory_flashback_{candidate.memory_id}"
     handler = VNextFlashbackEventHandler(cast(BasePlugin, _Plugin(_DiaryRuntime())))
     handler._upsert_stream_reminder(stream_id, name, candidate)
     items = reminder_store.get_items(f"stream:{stream_id}:actor", names=[name])
@@ -214,12 +214,12 @@ async def test_private_persona_is_fixed_in_first_user_and_refreshes_without_dupl
     from src.app.plugin_system.types import EventType
 
     from .. import plugin as plugin_module
-    from ..config import EngramMemoryConfig
+    from ..config import MnemosyneMemoryConfig
     from ..prompts import MEMORY_GUIDE_REMINDER
     from ..vnext import persona_injection
 
     stream_id = "stream-private"
-    plugin = plugin_module.EngramMemoryPlugin(EngramMemoryConfig())
+    plugin = plugin_module.MnemosyneMemoryPlugin(MnemosyneMemoryConfig())
     persona = SimpleNamespace(
         person_id="person-example",
         impression_text="他希望我叫他小树。①",
@@ -244,7 +244,7 @@ async def test_private_persona_is_fixed_in_first_user_and_refreshes_without_dupl
         read_persona.assert_not_awaited()
     reminder_store.set(
         f"stream:{stream_id}:actor",
-        "engram_memory_guide",
+        "mnemosyne_memory_guide",
         MEMORY_GUIDE_REMINDER,
         insert_type="dynamic",
     )
@@ -280,7 +280,7 @@ async def test_private_persona_is_fixed_in_first_user_and_refreshes_without_dupl
         for text in _text_parts(payload)
     )
     assert any(
-        "engram_memory_guide" in text for text in _text_parts(params["payloads"][-1])
+        "mnemosyne_memory_guide" in text for text in _text_parts(params["payloads"][-1])
     )
     assert any("今日回顾" in text for text in _text_parts(params["payloads"][-1]))
 
@@ -303,7 +303,7 @@ async def test_private_persona_is_fixed_in_first_user_and_refreshes_without_dupl
     )
     assert not any("小树" in text for text in flattened)
     assert any(
-        "engram_memory_guide" in text for text in _text_parts(params["payloads"][-1])
+        "mnemosyne_memory_guide" in text for text in _text_parts(params["payloads"][-1])
     )
     assert any("今日回顾" in text for text in _text_parts(params["payloads"][-1]))
     other = _new_request("stream-other", reminder_store)
@@ -327,7 +327,7 @@ async def test_group_persona_uses_recent_participants_and_replaces_old_block(
     from .. import plugin as plugin_module
     from ..vnext import persona_injection
 
-    plugin = plugin_module.EngramMemoryPlugin(EngramMemoryConfig())
+    plugin = plugin_module.MnemosyneMemoryPlugin(MnemosyneMemoryConfig())
     plugin.config.vnext.prompt_injection.group_persona_max_people = 2
     lookup = AsyncMock(side_effect=lambda person_id: {
         "person-a": SimpleNamespace(
@@ -359,7 +359,7 @@ async def test_group_persona_uses_recent_participants_and_replaces_old_block(
     monkeypatch.setattr(persona_injection.person_api, "generate_raw_person_id",
                         lambda platform, sender: f"{platform}:{sender}")
     stream_id = "group-a"
-    reminder_store.set(f"stream:{stream_id}:actor", "engram_memory_guide", "指引", insert_type="dynamic")
+    reminder_store.set(f"stream:{stream_id}:actor", "mnemosyne_memory_guide", "指引", insert_type="dynamic")
     reminder_store.set(f"stream:{stream_id}:actor", REMINDER_NAME, "日记", insert_type="dynamic")
     reminder_store.set(f"stream:{stream_id}:actor", persona_injection.GROUP_REMINDER_NAME,
                        "旧人物印象", insert_type="dynamic")
@@ -400,7 +400,7 @@ async def test_group_persona_uses_recent_participants_and_replaces_old_block(
 
 
 @pytest.mark.parametrize("reason", [
-    "engram_chat_diary_update", "engram_vnext_persona_update", "background_task",
+    "mnemosyne_chat_diary_update", "mnemosyne_vnext_persona_update", "background_task",
     "unloading", "no_owner", "no_stream", "bad_payloads", "other_event",
 ])
 @pytest.mark.asyncio
@@ -413,7 +413,7 @@ async def test_group_persona_skips_ineligible_requests(
     from .. import plugin as plugin_module
     from ..vnext import persona_injection
 
-    plugin = plugin_module.EngramMemoryPlugin(EngramMemoryConfig())
+    plugin = plugin_module.MnemosyneMemoryPlugin(MnemosyneMemoryConfig())
     plugin._unloading = reason == "unloading"
     lookup = AsyncMock()
     if reason != "no_owner":
@@ -426,7 +426,7 @@ async def test_group_persona_skips_ineligible_requests(
     monkeypatch.setattr(persona_injection.message_api, "get_messages_before_time_in_chat", query)
     payloads = [LLMPayload(ROLE.USER, Text("聊天正文"))]
     if reason != "background_task":
-        payloads[0].content.append(Text("<system_reminder>\n[engram_memory_guide]\n指引\n</system_reminder>"))
+        payloads[0].content.append(Text("<system_reminder>\n[mnemosyne_memory_guide]\n指引\n</system_reminder>"))
     original = _text_parts(payloads[0])
     params = {
         "request_name": reason,
@@ -459,10 +459,10 @@ async def test_private_persona_removes_old_block_when_no_current_impression(
     from src.app.plugin_system.types import EventType
 
     from .. import plugin as plugin_module
-    from ..config import EngramMemoryConfig
+    from ..config import MnemosyneMemoryConfig
     from ..vnext import persona_injection
 
-    plugin = plugin_module.EngramMemoryPlugin(EngramMemoryConfig())
+    plugin = plugin_module.MnemosyneMemoryPlugin(MnemosyneMemoryConfig())
     info = {
         "chat_type": "group" if missing == "group" else "private",
         "person_id": "" if missing == "identity" else "person-example",
@@ -523,7 +523,7 @@ async def test_private_persona_removes_old_block_when_no_current_impression(
 
 @pytest.mark.parametrize(
     "request_name",
-    ["engram_chat_diary_update", "engram_vnext_persona_update", "background_task"],
+    ["mnemosyne_chat_diary_update", "mnemosyne_vnext_persona_update", "background_task"],
 )
 @pytest.mark.asyncio
 async def test_private_persona_skips_internal_or_non_actor_requests(
@@ -538,10 +538,10 @@ async def test_private_persona_skips_internal_or_non_actor_requests(
     from src.app.plugin_system.types import EventType
 
     from .. import plugin as plugin_module
-    from ..config import EngramMemoryConfig
+    from ..config import MnemosyneMemoryConfig
     from ..vnext import persona_injection
 
-    plugin = plugin_module.EngramMemoryPlugin(EngramMemoryConfig())
+    plugin = plugin_module.MnemosyneMemoryPlugin(MnemosyneMemoryConfig())
     lookup, get_stream = AsyncMock(), AsyncMock()
     plugin.runtime_owner = cast(
         plugin_module.VNextRuntimeOwner,
@@ -553,7 +553,7 @@ async def test_private_persona_skips_internal_or_non_actor_requests(
     payloads = [LLMPayload(ROLE.USER, Text("独立输入"))]
     if request_name != "background_task":
         payloads[0].content.append(
-            Text("<system_reminder>\n[engram_memory_guide]\n指引\n</system_reminder>")
+            Text("<system_reminder>\n[mnemosyne_memory_guide]\n指引\n</system_reminder>")
         )
     original = list(_text_parts(payloads[0]))
     params = {
@@ -589,13 +589,13 @@ def test_reminder_payload_is_scoped_to_stream_and_removal_is_local(
             ROLE.USER,
             [
                 Text(f"<system_reminder>\n[{REMINDER_NAME}]\n旧\n</system_reminder>"),
-                Text("历史正文中提到 [engram_memory_chat_diary] 但不是独立块"),
+                Text("历史正文中提到 [mnemosyne_memory_chat_diary] 但不是独立块"),
             ],
         ),
     ]
     assert refresh_diary_payloads(payloads, "")
     assert _text_parts(payloads[0]) == [
-        "历史正文中提到 [engram_memory_chat_diary] 但不是独立块"
+        "历史正文中提到 [mnemosyne_memory_chat_diary] 但不是独立块"
     ]
 
 
@@ -627,7 +627,7 @@ async def test_events_wake_without_awaiting_generation_and_skip_internal_request
     assert runtime.read_streams == []
 
     payloads = [LLMPayload(ROLE.USER, Text("日记生成任务输入"))]
-    for request_name in ("engram_chat_diary_update", "engram_vnext_persona_update"):
+    for request_name in ("mnemosyne_chat_diary_update", "mnemosyne_vnext_persona_update"):
         decision, output = await handler.execute(
             EventType.BEFORE_LLM_REQUEST,
             {
@@ -741,8 +741,8 @@ async def test_feedforward_refreshes_active_neo_chatter_prompt_before_render(
     from ..vnext import runtime_components
 
     stream_id = "stream-feedforward"
-    config = EngramMemoryConfig()
-    plugin = plugin_module.EngramMemoryPlugin(config)
+    config = MnemosyneMemoryConfig()
+    plugin = plugin_module.MnemosyneMemoryPlugin(config)
     candidate = FlashbackCandidate(
         "memory-feedforward", "咖啡", "你提过咖啡会影响睡眠。", "咖啡"
     )
@@ -783,7 +783,7 @@ async def test_feedforward_refreshes_active_neo_chatter_prompt_before_render(
         stream_id, (candidate,), 3
     )
     assert plugin._flashback_reminder_streams == {
-        stream_id: {f"engram_memory_flashback_{candidate.memory_id}"}
+        stream_id: {f"mnemosyne_memory_flashback_{candidate.memory_id}"}
     }
 
 
@@ -800,8 +800,8 @@ async def test_feedforward_skips_sub_agent_and_internal_prompts(
     from .. import plugin as plugin_module
     from ..vnext import runtime_components
 
-    config = EngramMemoryConfig()
-    plugin = plugin_module.EngramMemoryPlugin(config)
+    config = MnemosyneMemoryConfig()
+    plugin = plugin_module.MnemosyneMemoryPlugin(config)
     consume = AsyncMock(return_value=())
     owner = SimpleNamespace(
         config=config,
@@ -813,8 +813,8 @@ async def test_feedforward_skips_sub_agent_and_internal_prompts(
     handler = VNextFlashbackEventHandler(cast(BasePlugin, plugin))
     for template_name in (
         "neo_default_chatter_sub_agent_user_prompt",
-        "engram_chat_diary_update_user_prompt",
-        "engram_vnext_persona_update_user_prompt",
+        "mnemosyne_chat_diary_update_user_prompt",
+        "mnemosyne_vnext_persona_update_user_prompt",
     ):
         await handler.execute(
             EventType.ON_PROMPT_BUILD,

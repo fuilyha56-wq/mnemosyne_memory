@@ -1,18 +1,18 @@
-# Engram Memory
+# Mnemosyne Memory
 
-当前市场版本为 **2.0.3**，基于 `feat/engram-memory-trial-dev`，沿用 `2.0.1` 的版本序列。误发布的 `1.1.0` 已撤下。本次补充初始化成功日志、实际组件注册及构建包加载验收，不改变数据库 Schema 或已保存的数据。
+当前市场版本为 **2.0.3**，开发分支为 `mnemosyne-memory-dev`，以主 `dev` 为基线独立开发，不再依赖 `feat/mnemosyne-memory-trial` 分支。沿用 `2.0.1` 的版本序列，误发布的 `1.1.0` 已撤下。本次补充初始化成功日志、实际组件注册及构建包加载验收，不改变数据库 Schema 或已保存的数据。
 
 ## 安装与加载
 
-需要 Neo-MoFox `1.2.0-rc.2` 或更新版本，且 `stream_api=2.0.0`、`message_api/person_api>=1.1.0`。将发布的 `.mfp` 放在主程序 `plugins/` 根目录，或将源码文件夹放为 `plugins/engram_memory/`。同一插件只保留一个安装来源，避免文件夹和旧包重复发现。不要把整个 Neo-MoFox 仓库或包含多层目录的压缩包作为插件安装。
+需要 Neo-MoFox `1.2.0-rc.2` 或更新版本，且 `stream_api=2.0.0`、`message_api/person_api>=1.1.0`。将发布的 `.mfp` 放在主程序 `plugins/` 根目录，或将源码文件夹放为 `plugins/mnemosyne_memory/`。同一插件只保留一个安装来源，避免文件夹和旧包重复发现。不要把整个 Neo-MoFox 仓库或包含多层目录的压缩包作为插件安装。
 
-源码安装必须包含根级 `manifest.json`、`plugin.py`、`config.py` 和完整子模块；只有 `.git`、空目录或 `__pycache__` 的残留目录不是有效安装。缺少 manifest 时不会被发现，缺少入口或子模块时无法注册。请在实际启动实例的 `plugins/` 中安装完整发布包或源码，而不是仅更新开发工作树。正常启动会输出 `Engram Memory 已初始化`，随后由宿主注册事件处理器并输出插件加载成功日志。
+源码安装必须包含根级 `manifest.json`、`plugin.py`、`config.py` 和完整子模块；只有 `.git`、空目录或 `__pycache__` 的残留目录不是有效安装。缺少 manifest 时不会被发现，缺少入口或子模块时无法注册。请在实际启动实例的 `plugins/` 中安装完整发布包或源码，而不是仅更新开发工作树。正常启动会输出 `Mnemosyne Memory 已初始化`，随后由宿主注册事件处理器并输出插件加载成功日志。
 
 主程序先初始化核心数据库、模型配置及插件依赖，再加载插件。Embedding 未配置或 Neo4j 不可用不会阻断 SQLite 记忆、日记与人物能力；插件独立数据库初始化失败则会明确报错。验收必须检查 Runtime Owner 已初始化，不能仅依据主程序输出“插件加载成功”。测试包含文件夹与 `.mfp` 的隔离发现、完整初始化和卸载，均不连接生产账号或修改生产记忆库。
 
 ## Cue-Driven Reconstructive Memory
 
-当前版本将在线回忆与后台候选收集分开：消息先进入 Episode 经历层，由规则线索、人物/主题关联和有限多跳扩散形成短期 Working Memory；正式 Memory/Revision 仍须经过明确提案确认或既有正式写入接口。当前尚未实现自动模型审核巩固，也未将 Episode 与正式 Memory 闪回统一为同一竞争器。
+当前版本将在线回忆与后台候选收集分开：消息先进入 Episode 经历层，由规则线索、人物/主题关联和有限多跳扩散形成短期 Working Memory；正式 Memory/Revision 仍须经过明确提案确认或既有正式写入接口。后台可以审核候选，但不会自动确认正式记忆，也未将 Episode 与正式 Memory 闪回统一为同一竞争器。
 
 - `ingest_episode`：跨插件写入 Episode，不直接创建正式事实。
 - `read_working_memory`：读取当前流的短期、有来源回忆片段。
@@ -24,25 +24,38 @@
 
 回复后追加 OUTPUT Episode 及 Observation，区分激活片段与正文中明确出现的 Episode ID；没有 ID 的自然语言引用不做推测识别。观察记录关联发送时间之前、同流且仍有效的最近 Working Memory，表示候选激活上下文，不证明模型实际使用。重复输出事件不覆盖首次观察。
 
-后台每次最多从最近 100 条 INPUT/SUMMARY 和 100 次工作记忆中收集 5 条巩固候选：出现纠正线索、显著性达到 0.6，或被至少 3 个不同输入经历激活。主动查询不计入重复激活。候选以幂等 `uncertain` 提案保留原文和触发原因，不调用模型、不自动创建正式事实。`read_working_memory` 的 `pending_proposals` 提供当前流待审目录；审核后应以来源为依据创建明确提案，`uncertain` 本身不能直接确认。
+后台每次最多从最近 100 条 INPUT/外部 SUMMARY 和 100 次工作记忆中收集 5 条巩固候选：出现纠正线索、显著性达到 0.6，或被至少 3 个不同输入经历激活。聊天日记的模型摘要不进入事实候选池。主动查询不计入重复激活。候选以幂等 `uncertain` 提案保留原文和触发原因，收集阶段不调用模型、不自动创建正式事实。`read_working_memory` 的 `pending_proposals` 提供当前流待审目录；审核后应以来源为依据创建明确提案，`uncertain` 本身不能直接确认。
 
 启用后台巩固后，Runtime Owner 会以 `vnext.claim_review.background_interval_seconds` 为间隔扫描已经观测到的聊天流，依次执行候选收集、Claim/Hypothesis 同步和有限审核。后台任务由框架统一托管，插件卸载时取消并等待；它不会调用 `confirm_memory_update`，因此审核通过仍只会留下可核对的明确提案。
 
 主动关联查询不再写入 Episode；历史 CUE 与 OUTPUT 不进入事实回忆候选，也不能用作事实提案证据。重构扰动由查询/经历 ID 与候选 ID 确定，参与排序；重复惩罚在每次选入后重新排名，同一输入可复查选择依据。
 
-随机扰动只影响已有 Episode 候选的选择，不改变 Episode 正文、不生成无来源事实，也不覆盖明确纠正。Shameimaru Memory 负责后台摘要和巩固素材，Engram Recall Engine 负责在线前馈与工作记忆。
+随机扰动只影响已有 Episode 候选的选择，不改变 Episode 正文、不生成无来源事实，也不覆盖明确纠正。内置聊天日记负责后台回顾，Episode 服务负责经历索引；外部摘要必须显式通过服务接口摄入，并非内置 Shameimaru 摘要器。
 
-Engram Memory 保存可追溯、可检索、可修订的正式记忆，并根据正式记忆变化更新核心人物印象。
+### 开发版：可追溯日记经历索引
+
+`-dev` 的新增强将日记作为回忆索引，而不是把模型摘要直接升级成事实。原有消息 Episode 和正式 Memory 保持不变，日记生成也不增加第二次模型调用。
+
+- 默认 `diary.episode_export_enabled=true`。日记正文、处理游标和摘要待投递记录在独立日记库的同一事务中提交。
+- 后台从待投递队列写入 `SUMMARY` Episode，来源类型为 `CHAT_DIARY_SUMMARY`、置信度为 `0.35`。来源键包含聊天流、日期和处理水位，保留实际参与者以及原消息 ID、发送者、时间引用；这些引用用于追溯整日日记的覆盖范围，不证明摘要每句话都有对应证据。
+- Episode 写入或投递确认失败后保留队列；重启后继续投递，不重新调用模型，同一来源重放不会覆盖原记录或重复创建经历。
+- 同流同日的新摘要以追加的 `DIARY_SUPERSEDES` 关系替代旧摘要参与召回；旧正文和线索仍保留，不修改或删除。摘要不会跨聊天流召回。
+- 投递前重新检查聊天类型开关和流/发送者采集许可。关闭导出开关时不投递，日记照常保存；重新开启从新增日记批次开始，不自动回填增强前的历史日记。
+- 日记摘要可以进入 Working Memory，但会标记为模型回顾索引，不能用于 `propose_memory_update` 或 `confirm_memory_update` 的事实证据，也不参与后台事实候选收集。正式事实仍须引用真实经历并显式确认。
+
+隔离示例：在框架根目录运行 `uv run python -m plugins.mnemosyne_memory.examples.chat_diary`。示例不连接模型或生产数据库，覆盖日记续读、待投递恢复和同日摘要替代。
+
+Mnemosyne Memory 保存可追溯、可检索、可修订的正式记忆，并根据正式记忆变化更新核心人物印象。
 
 ## 强度衰减与语义回忆
 
 正式记忆现在有一个运行时强度视图。强度由最近经历时间、证据来源质量、证据数量和召回事件共同计算；时间会使强度衰减，近期被实际召回会提供有限强化。强度不会改写 Revision，也不会删除 Evidence。
 
-当记忆超过最小年龄且强度低于阈值时，系统只生成 `memory_decay_candidates` 候选，并可通过 Doctor 的 `/api/engram-vnext/decay-candidates` 查看。候选必须经过明确核对后才能执行 `memory_invalidate`；系统不会因为长期未使用而静默作废正式记忆。`memory_search` 和 `memory_read` 会返回当前强度、年龄、证据数和召回次数，便于解释排序与遗忘建议。
+当记忆超过最小年龄且强度低于阈值时，系统只生成 `memory_decay_candidates` 候选，并可通过 Doctor 的 `/api/mnemosyne-vnext/decay-candidates` 查看。候选必须经过明确核对后才能执行 `memory_invalidate`；系统不会因为长期未使用而静默作废正式记忆。`memory_search` 和 `memory_read` 会返回当前强度、年龄、证据数和召回次数，便于解释排序与遗忘建议。
 
-Episode 工作记忆在规则人物/主题关联之外，可使用 Engram 已配置的 Embedding 任务补充语义关联。Embedding 请求失败、返回格式错误或关闭 `semantic_recall_enabled` 时，会回退到确定性的规则与关系召回，不生成无来源内容。语义通道只改变已有 Episode 候选的选择，不改变 Episode 正文，也不把经历直接提升为正式 Memory。
+Episode 工作记忆在规则人物/主题关联之外，可使用 Mnemosyne 已配置的 Embedding 任务补充语义关联。Embedding 请求失败、返回格式错误或关闭 `semantic_recall_enabled` 时，会回退到确定性的规则与关系召回，不生成无来源内容。语义通道只改变已有 Episode 候选的选择，不改变 Episode 正文，也不把经历直接提升为正式 Memory。
 
-相关配置位于 `config/plugins/engram_memory/config.toml`：`vnext.retrieval.memory_half_life_days`、`recall_half_life_days`、`forget_threshold`、`forget_min_age_days` 控制正式记忆强度；`vnext.flashback.semantic_recall_enabled`、`semantic_candidate_limit`、`semantic_min_similarity` 控制 Episode 语义补召回。
+相关配置位于 `config/plugins/mnemosyne_memory/config.toml`：`vnext.retrieval.memory_half_life_days`、`recall_half_life_days`、`forget_threshold`、`forget_min_age_days` 控制正式记忆强度；`vnext.flashback.semantic_recall_enabled`、`semantic_candidate_limit`、`semantic_min_similarity` 控制 Episode 语义补召回。
 
 ## 前馈式记忆检索
 
@@ -57,13 +70,13 @@ Episode 工作记忆在规则人物/主题关联之外，可使用 Engram 已配
 
 L0 感知、L1 工作集、L2 热缓存、ACT-R/KDA 读出和 Transformer 排序状态在进程内，重启后会从新的消息线索重新预热；正式记忆变化时清除对应缓存。正式记忆、来源范围和向量 Outbox 持久化在独立数据库中，向量派生索引恢复后继续投递。前馈只读取 ACTIVE 记忆，不创建或改写记忆，选中结果复用 SystemReminder 闪回注入链路。参数见 `vnext.feedforward.*`。
 
-前馈注入只作用于主聊天的 User prompt。SubAgent、Engram 日记整理、人物印象生成等内部请求会跳过前馈，避免把当前聊天的记忆再次注入后台生成上下文。私聊按当前流及准确人物范围检索；群聊只接受同一聊天流的可验证来源，不能跨群或把私聊来源带入群聊。
+前馈注入只作用于主聊天的 User prompt。SubAgent、Mnemosyne 日记整理、人物印象生成等内部请求会跳过前馈，避免把当前聊天的记忆再次注入后台生成上下文。私聊按当前流及准确人物范围检索；群聊只接受同一聊天流的可验证来源，不能跨群或把私聊来源带入群聊。
 
 话题切换时，最新一条输入会单独检索一次并以 `recency_weight` 参与扩散；连续被选中、但本轮最新输入并不指向的记忆按复述次数受 `inhibition_weight` 返回抑制，避免先被想起的记忆一直占据首位。
 
 ## Neo4j Episode 图
 
-`neo4j` 驱动随框架默认安装，`vnext.neo4j.enabled` 默认开启。驱动只用于把 Episode 与关联边镜像到图数据库，主库仍是 SQLite。密码优先读取环境变量 `ENGRAM_NEO4J_PASSWORD`，地址优先读取 `ENGRAM_NEO4J_URI`；未配置密码时跳过镜像，连接失败只记录警告，不会阻断插件加载。
+`neo4j` 驱动随框架默认安装，`vnext.neo4j.enabled` 默认开启。驱动只用于把 Episode 与关联边镜像到图数据库，主库仍是 SQLite。密码优先读取环境变量 `MNEMOSYNE_NEO4J_PASSWORD`，地址优先读取 `MNEMOSYNE_NEO4J_URI`；未配置密码时跳过镜像，连接失败只记录警告，不会阻断插件加载。
 
 使用项目根目录的 `docker-compose.yml` 时，Neo4j 服务会一同启动，启动前需设置强密码 `NEO4J_PASSWORD`。本地运行时可自行启动 Neo4j 5，并设置上述环境变量或 `vnext.neo4j.password`。
 
@@ -118,7 +131,7 @@ L0 感知、L1 工作集、L2 热缓存、ACT-R/KDA 读出和 Transformer 排序
 可在项目根目录运行不连接数据库或模型的离线示例：
 
 ```powershell
-uv run --no-sync python -B -m plugins.engram_memory.examples.private_persona
+uv run --no-sync python -B -m plugins.mnemosyne_memory.examples.private_persona
 ```
 
 ## 写入与来源
@@ -135,7 +148,7 @@ uv run --no-sync python -B -m plugins.engram_memory.examples.private_persona
 
 ## 管理页
 
-插件加载后提供只读管理页 `/engram-memory`，包含概览、正式记忆和人物印象三个页面。管理数据 API 只接受回环地址请求，浏览页面不会生成印象或修改记忆。图标资源随插件打包，不依赖外部 CDN；上游许可见 [router/lucide.LICENSE](router/lucide.LICENSE)。
+插件加载后提供只读管理页 `/mnemosyne-memory`，包含概览、正式记忆和人物印象三个页面。管理数据 API 只接受回环地址请求，浏览页面不会生成印象或修改记忆。图标资源随插件打包，不依赖外部 CDN；上游许可见 [router/lucide.LICENSE](router/lucide.LICENSE)。
 
 正式记忆和人物均在服务端筛选、计数和分页，每页可选 20、50、100 条，也可直接跳转页码。记忆可按状态筛选，并搜索标题、正文或完整 ID；人物可按平台账号、内部 ID、平台昵称、群名片或印象正文搜索，并按最近资料更新或昵称排序。搜索中的百分号和下划线按普通字符匹配，不作为通配符。详情跳转保留原列表的搜索、筛选、页码和滚动位置；手机端在列表与详情之间切换。
 
@@ -169,7 +182,7 @@ Doctor 提供正式记忆、版本证据、检索入口和向量索引的检查�
 | `vnext.flashback.cooldown_turns` | `3` | 同一记忆在同一聊天中的重复闪回间隔 |
 | `vnext.vector.worker_retry_limit` | `3` | 向量任务的失败重试上限 |
 
-正式记忆数据库默认位于 `data/engram_memory/vnext.db`，向量索引默认位于 `data/engram_memory/chroma`。可通过 `storage.vnext_db_path` 和 `storage.vector_db_path` 调整位置。
+正式记忆数据库默认位于 `data/mnemosyne_memory/vnext.db`，向量索引默认位于 `data/mnemosyne_memory/chroma`。可通过 `storage.vnext_db_path` 和 `storage.vector_db_path` 调整位置。
 
 启用后，插件注册四个 Action、六个 Tool、记忆变化、闪回、私聊印象、群聊印象与聊天日记 EventHandler、记忆 Service、Doctor 与管理 Router，并维护派生向量索引。vnext 包含 `persona`、`retrieval`、`flashback`、`feedforward`、`claim_review`、`neo4j`、`prompt_injection`、`vector`；独立聊天日记使用 `diary` 节。前馈开启时替代自然闪回，关闭自动回忆须同时关闭 `vnext.feedforward.enabled` 与 `vnext.flashback.enabled`。
 
@@ -208,10 +221,10 @@ Doctor 提供正式记忆、版本证据、检索入口和向量索引的检查�
 可在项目根目录运行本地隔离示例：
 
 ```powershell
-uv run --no-sync python -m plugins.engram_memory.examples.chat_diary
+uv run --no-sync python -m plugins.mnemosyne_memory.examples.chat_diary
 ```
 
-## 迁移已有 Engram 数据结构
+## 迁移已有 Mnemosyne 数据结构
 
 当前 Schema 为 v7，保存正式记忆、经历、候选审核与人物印象历史。升级插件后正常启动即可：初始化会自动将已知的 Schema v1 至 v6 升级至当前版本，无须手动运行脚本或切换数据库路径。迁移在运行时数据库打开、后台任务启动前完成；已经是当前版本时不重复迁移，也不创建升级备份。
 
@@ -222,19 +235,19 @@ v4 只增加 nullable `seen_revision_ids` JSON 列；v2/v3 同时补入既有的
 离线副本迁移脚本仅用于维护或预演，不是正常升级的必需步骤。输入须是已经合并 WAL、没有 WAL/SHM 文件的独立快照，不能只复制主文件而遗漏尚未合入的数据。从项目根目录运行：
 
 ```powershell
-uv run --no-sync python plugins/engram_memory/scripts/migrate_schema.py --source data/memory-copy/vnext.db --target data/memory-migrated/vnext.db
+uv run --no-sync python plugins/mnemosyne_memory/scripts/migrate_schema.py --source data/memory-copy/vnext.db --target data/memory-migrated/vnext.db
 ```
 
 脚本要求交互确认，拒绝当前配置正在使用的数据库和已存在的输出文件。它与自动迁移复用转换规则，只写新副本，并核对来源未变、原始字段摘要、数据库完整性及外键。离线维护时，向量目录应另行复制并与新数据库一起切换；脚本不会操作 Bot、修改配置或切换生产库。
 
 ## 从 Booku 迁移记忆
 
-迁移器只把 Booku 的 `memory` bucket 导入 Engram；`knowledge` 文档片段会明确计数并跳过，不会变成正式记忆。迁移不会写入当前 Engram 或 Booku 数据库，也不会修改配置。目标目录必须是新目录，已存在时拒绝覆盖。
+迁移器只把 Booku 的 `memory` bucket 导入 Mnemosyne；`knowledge` 文档片段会明确计数并跳过，不会变成正式记忆。迁移不会写入当前 Mnemosyne 或 Booku 数据库，也不会修改配置。目标目录必须是新目录，已存在时拒绝覆盖。
 
 在项目根目录运行：
 
 ```powershell
-uv run --no-sync plugins/engram_memory/scripts/migrate_booku.py
+uv run --no-sync plugins/mnemosyne_memory/scripts/migrate_booku.py
 ```
 
 默认先显示 Booku 配置所指元数据库中的记忆数量，并说明知识片段将被跳过。只有在提示处准确输入 `迁移`，才会创建新目标目录并执行导入、重建向量索引、回读和实际检索核对；其他输入不会开始迁移。`--preview` 只检查并显示预览后退出。没有 `--apply` 或 `--yes` 这类跳过交互确认的选项。
@@ -244,7 +257,7 @@ uv run --no-sync plugins/engram_memory/scripts/migrate_booku.py
 | 参数 | 行为 |
 | --- | --- |
 | `--source` | 指定 Booku SQLite 元数据库的相对路径；省略时读取 Booku 配置中的路径。 |
-| `--output` | 指定全新的相对输出目录；默认 `data/engram_memory/booku-import`。 |
+| `--output` | 指定全新的相对输出目录；默认 `data/mnemosyne_memory/booku-import`。 |
 | `--batch-size` | 每次向量模型请求的记忆条数；默认 `32`，上限 `100`。 |
 | `--resume` | 仅续跑本迁移器已完整导入、但向量索引失败的私有输出目录；仍需交互输入 `继续`。 |
 
@@ -252,4 +265,4 @@ uv run --no-sync plugins/engram_memory/scripts/migrate_booku.py
 
 类型映射为 `event → EVENT`、`preference → PREFERENCE`，其余旧记忆类型进入 `FACT`；旧分类、标签和原始字段完整留在来源记录中。筛选依据是 `bucket`：记忆区中原类型为 `knowledge` 的记录仍是记忆，会保留；知识库 `bucket=knowledge` 的文档片段不会导入。迁移不让模型改写旧正文。
 
-完成后，新目录包含 `vnext.db`、`chroma`、Booku SQLite 原始副本，以及供本机核对的简明 `report` 和 `events`。原始副本是完整 SQLite 快照，包含源库中的所有内容。迁移输出可能含私人资料或凭据，仅供本机核对，请勿对外分享。迁移本身不切换正在运行的 Engram。需要启用新库时，先停止 Bot，再手动将 `storage.vnext_db_path` 与 `storage.vector_db_path` 成对改到新目录；不会自动合并或覆盖现有 Engram 记忆，本说明中的迁移步骤也不会替你切换配置。
+完成后，新目录包含 `vnext.db`、`chroma`、Booku SQLite 原始副本，以及供本机核对的简明 `report` 和 `events`。原始副本是完整 SQLite 快照，包含源库中的所有内容。迁移输出可能含私人资料或凭据，仅供本机核对，请勿对外分享。迁移本身不切换正在运行的 Mnemosyne。需要启用新库时，先停止 Bot，再手动将 `storage.vnext_db_path` 与 `storage.vector_db_path` 成对改到新目录；不会自动合并或覆盖现有 Mnemosyne 记忆，本说明中的迁移步骤也不会替你切换配置。

@@ -1,4 +1,4 @@
-"""engram_memory 插件配置。"""
+"""mnemosyne_memory 插件配置。"""
 
 from __future__ import annotations
 
@@ -27,14 +27,14 @@ class StorageSection(SectionBase):
     """vNext 数据库与向量索引路径。"""
 
     vector_db_path: str = Field(
-        default="data/engram_memory/chroma",
+        default="data/mnemosyne_memory/chroma",
         description="向量数据库路径（ChromaDB）",
         label="向量库路径",
         input_type="text",
         tag="file",
     )
     vnext_db_path: str = Field(
-        default="data/engram_memory/vnext.db",
+        default="data/mnemosyne_memory/vnext.db",
         description="正式记忆数据库路径",
         label="vNext 数据库路径",
         input_type="text",
@@ -42,11 +42,11 @@ class StorageSection(SectionBase):
     )
 
 
-class EngramMemoryConfig(BaseConfig):
-    """Engram Memory 连续记忆配置模型。"""
+class MnemosyneMemoryConfig(BaseConfig):
+    """Mnemosyne Memory 连续记忆配置模型。"""
 
     name: ClassVar[str] = "config"
-    description: ClassVar[str] = "Engram Memory 正式记忆、人物印象与自然闪回"
+    description: ClassVar[str] = "Mnemosyne Memory 正式记忆、人物印象与自然闪回"
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:

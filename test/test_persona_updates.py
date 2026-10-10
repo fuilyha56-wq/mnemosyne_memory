@@ -13,7 +13,7 @@ import pytest
 
 from src.app.plugin_system.types import LLMRequest, LLMResponse, ToolCall, ToolResult
 
-from ..config import EngramMemoryConfig
+from ..config import MnemosyneMemoryConfig
 from ..vnext import persona_service, persona_updater
 from ..vnext.domain import MemoryChanged
 from ..vnext.enums import MemoryEventType
@@ -643,7 +643,7 @@ def test_persona_config_ignores_obsolete_length_limit() -> None:
         "internal_llm": {"task_name": "example-task"},
         "vnext": {"persona": {"max_length": 500, "recent_memory_limit": 7}},
     }
-    config = EngramMemoryConfig.from_dict(data)
+    config = MnemosyneMemoryConfig.from_dict(data)
     assert config.vnext.persona.model_dump() == {
         "recent_memory_limit": 7,
         "max_concurrency": 3,
@@ -774,21 +774,21 @@ def test_persona_schema_migration_preserves_old_audit(
     target = tmp_path / "target.db"
     with closing(sqlite3.connect(source)) as connection:
         connection.executescript(
-            "CREATE TABLE engram_vnext_memory(memory_id TEXT);"
-            "CREATE TABLE engram_vnext_memory_revision(revision_id TEXT);"
-            "CREATE TABLE engram_vnext_evidence(evidence_id TEXT);"
-            "CREATE TABLE engram_vnext_schema_version(schema_key TEXT,version INTEGER,applied_at TEXT);"
-            "CREATE TABLE engram_vnext_persona_update_log("
+            "CREATE TABLE mnemosyne_vnext_memory(memory_id TEXT);"
+            "CREATE TABLE mnemosyne_vnext_memory_revision(revision_id TEXT);"
+            "CREATE TABLE mnemosyne_vnext_evidence(evidence_id TEXT);"
+            "CREATE TABLE mnemosyne_vnext_schema_version(schema_key TEXT,version INTEGER,applied_at TEXT);"
+            "CREATE TABLE mnemosyne_vnext_persona_update_log("
             "update_id TEXT,person_id TEXT,old_content_hash TEXT,new_content_hash TEXT,"
             "reason TEXT,created_at TEXT);"
-            "INSERT INTO engram_vnext_persona_update_log VALUES ('old','person-a','a','b','legacy','time');"
+            "INSERT INTO mnemosyne_vnext_persona_update_log VALUES ('old','person-a','a','b','legacy','time');"
         )
         if source_version == 2:
             connection.execute(
-                "CREATE TABLE engram_vnext_person_persona(impression_text TEXT)"
+                "CREATE TABLE mnemosyne_vnext_person_persona(impression_text TEXT)"
             )
         connection.execute(
-            "INSERT INTO engram_vnext_schema_version VALUES (?,?,?)",
+            "INSERT INTO mnemosyne_vnext_schema_version VALUES (?,?,?)",
             (SCHEMA_KEY, source_version, "time"),
         )
         connection.commit()
@@ -798,7 +798,7 @@ def test_persona_schema_migration_preserves_old_audit(
     assert report["source_unchanged"] is True
     with closing(sqlite3.connect(target)) as connection:
         row = connection.execute(
-            "SELECT * FROM engram_vnext_persona_update_log"
+            "SELECT * FROM mnemosyne_vnext_persona_update_log"
         ).fetchone()
         assert row == (
             "old",
@@ -813,7 +813,7 @@ def test_persona_schema_migration_preserves_old_audit(
             None,
         )
         assert connection.execute(
-            "SELECT version FROM engram_vnext_schema_version"
+            "SELECT version FROM mnemosyne_vnext_schema_version"
         ).fetchone() == (SCHEMA_VERSION,)
 
 
@@ -1432,7 +1432,7 @@ async def test_schema_copy_preserves_real_memory_and_legacy_audit(
     with closing(sqlite3.connect(source)) as connection:
         if source_version == 4:
             connection.execute(
-                "ALTER TABLE engram_vnext_persona_update_log DROP COLUMN seen_revision_ids"
+                "ALTER TABLE mnemosyne_vnext_persona_update_log DROP COLUMN seen_revision_ids"
             )
         else:
             connection.executescript(
@@ -1440,30 +1440,30 @@ async def test_schema_copy_preserves_real_memory_and_legacy_audit(
                 "update_id VARCHAR(36) PRIMARY KEY,person_id TEXT NOT NULL,sleep_session_id VARCHAR(36),"
                 "old_content_hash TEXT NOT NULL,new_content_hash TEXT NOT NULL,"
                 "reason TEXT NOT NULL,created_at DATETIME NOT NULL,"
-                "FOREIGN KEY(sleep_session_id) REFERENCES engram_vnext_sleep_session(sleep_session_id));"
+                "FOREIGN KEY(sleep_session_id) REFERENCES mnemosyne_vnext_sleep_session(sleep_session_id));"
                 "INSERT INTO legacy_persona_log SELECT update_id,person_id,sleep_session_id,"
-                "old_content_hash,new_content_hash,reason,created_at FROM engram_vnext_persona_update_log;"
-                "DROP TABLE engram_vnext_persona_update_log;"
-                "ALTER TABLE legacy_persona_log RENAME TO engram_vnext_persona_update_log;"
-                "CREATE INDEX idx_engram_vnext_persona_log_person "
-                "ON engram_vnext_persona_update_log(person_id,created_at);"
+                "old_content_hash,new_content_hash,reason,created_at FROM mnemosyne_vnext_persona_update_log;"
+                "DROP TABLE mnemosyne_vnext_persona_update_log;"
+                "ALTER TABLE legacy_persona_log RENAME TO mnemosyne_vnext_persona_update_log;"
+                "CREATE INDEX idx_mnemosyne_vnext_persona_log_person "
+                "ON mnemosyne_vnext_persona_update_log(person_id,created_at);"
             )
         connection.execute(
-            "UPDATE engram_vnext_schema_version SET version=?", (source_version,)
+            "UPDATE mnemosyne_vnext_schema_version SET version=?", (source_version,)
         )
         if source_version == 2:
             connection.execute(
-                "CREATE TABLE engram_vnext_person_persona(person_id TEXT, impression_text TEXT)"
+                "CREATE TABLE mnemosyne_vnext_person_persona(person_id TEXT, impression_text TEXT)"
             )
             connection.execute(
-                "INSERT INTO engram_vnext_person_persona VALUES ('person-a','legacy')"
+                "INSERT INTO mnemosyne_vnext_person_persona VALUES ('person-a','legacy')"
             )
         if source_version == 1:
             connection.execute(
-                "ALTER TABLE engram_vnext_memory_revision ADD COLUMN event_start_at TEXT"
+                "ALTER TABLE mnemosyne_vnext_memory_revision ADD COLUMN event_start_at TEXT"
             )
             connection.execute(
-                "ALTER TABLE engram_vnext_memory_revision ADD COLUMN event_end_at TEXT"
+                "ALTER TABLE mnemosyne_vnext_memory_revision ADD COLUMN event_end_at TEXT"
             )
         connection.commit()
     before = source.read_bytes()
@@ -1471,7 +1471,7 @@ async def test_schema_copy_preserves_real_memory_and_legacy_audit(
     assert report["source_unchanged"] is True
     with closing(sqlite3.connect(target)) as connection:
         assert connection.execute(
-            "SELECT version FROM engram_vnext_schema_version"
+            "SELECT version FROM mnemosyne_vnext_schema_version"
         ).fetchone() == (SCHEMA_VERSION,)
     assert source.read_bytes() == before
     for path in (target, source):
@@ -1501,10 +1501,10 @@ async def test_schema_copy_preserves_real_memory_and_legacy_audit(
     assert len(backups) == 1
     with closing(sqlite3.connect(backups[0])) as connection:
         assert connection.execute(
-            "SELECT version FROM engram_vnext_schema_version"
+            "SELECT version FROM mnemosyne_vnext_schema_version"
         ).fetchone() == (source_version,)
         assert connection.execute(
-            "SELECT content FROM engram_vnext_memory_revision WHERE revision_id=?",
+            "SELECT content FROM mnemosyne_vnext_memory_revision WHERE revision_id=?",
             (saved.revision_id,),
         ).fetchone() == ("保持完整的原始记忆正文。",)
     if source_version == 1:
@@ -1533,10 +1533,10 @@ async def test_schema_initialization_migrates_once_and_preserves_backup(
         await schema.close()
     with closing(sqlite3.connect(path)) as connection:
         connection.execute(
-            "ALTER TABLE engram_vnext_persona_update_log DROP COLUMN seen_revision_ids"
+            "ALTER TABLE mnemosyne_vnext_persona_update_log DROP COLUMN seen_revision_ids"
         )
         connection.execute(
-            "UPDATE engram_vnext_schema_version SET version=4 WHERE schema_key=?",
+            "UPDATE mnemosyne_vnext_schema_version SET version=4 WHERE schema_key=?",
             (SCHEMA_KEY,),
         )
         connection.commit()
@@ -1548,24 +1548,24 @@ async def test_schema_initialization_migrates_once_and_preserves_backup(
         await schema.close()
     with closing(sqlite3.connect(path)) as connection:
         assert connection.execute(
-            "SELECT version FROM engram_vnext_schema_version"
+            "SELECT version FROM mnemosyne_vnext_schema_version"
         ).fetchone() == (SCHEMA_VERSION,)
         assert connection.execute(
-            "SELECT impression_text,seen_revision_ids FROM engram_vnext_persona_update_log"
+            "SELECT impression_text,seen_revision_ids FROM mnemosyne_vnext_persona_update_log"
         ).fetchone() == ("原印象正文", None)
     backups = list((tmp_path / "backups").glob("*.db"))
     assert len(backups) == 1
     with closing(sqlite3.connect(backups[0])) as connection:
         assert connection.execute(
-            "SELECT version FROM engram_vnext_schema_version"
+            "SELECT version FROM mnemosyne_vnext_schema_version"
         ).fetchone() == (4,)
         assert connection.execute(
-            "SELECT impression_text FROM engram_vnext_persona_update_log"
+            "SELECT impression_text FROM mnemosyne_vnext_persona_update_log"
         ).fetchone() == ("原印象正文",)
         assert "seen_revision_ids" not in {
             row[1]
             for row in connection.execute(
-                "PRAGMA table_info(engram_vnext_persona_update_log)"
+                "PRAGMA table_info(mnemosyne_vnext_persona_update_log)"
             )
         }
         assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
@@ -1595,17 +1595,17 @@ async def _create_legacy_persona_database(path: Any, source_version: int) -> Non
         await schema.close()
     with closing(sqlite3.connect(path)) as connection:
         connection.execute(
-            "ALTER TABLE engram_vnext_persona_update_log DROP COLUMN seen_revision_ids"
+            "ALTER TABLE mnemosyne_vnext_persona_update_log DROP COLUMN seen_revision_ids"
         )
         if source_version == 1:
             connection.execute(
-                "ALTER TABLE engram_vnext_memory_revision ADD COLUMN event_start_at TEXT"
+                "ALTER TABLE mnemosyne_vnext_memory_revision ADD COLUMN event_start_at TEXT"
             )
             connection.execute(
-                "ALTER TABLE engram_vnext_memory_revision ADD COLUMN event_end_at TEXT"
+                "ALTER TABLE mnemosyne_vnext_memory_revision ADD COLUMN event_end_at TEXT"
             )
         connection.execute(
-            "UPDATE engram_vnext_schema_version SET version=? WHERE schema_key=?",
+            "UPDATE mnemosyne_vnext_schema_version SET version=? WHERE schema_key=?",
             (source_version, SCHEMA_KEY),
         )
         connection.execute("CREATE TABLE operator_notes(body TEXT)")
@@ -1631,7 +1631,7 @@ async def test_schema_auto_migration_rolls_back_after_structure_changes(
             "SELECT type,name,sql FROM sqlite_master ORDER BY type,name"
         ).fetchall()
         before_audit = connection.execute(
-            "SELECT * FROM engram_vnext_persona_update_log"
+            "SELECT * FROM mnemosyne_vnext_persona_update_log"
         ).fetchall()
     schema = schema_module.VNextSchema(str(path))
     runtime_initialize = AsyncMock()
@@ -1672,16 +1672,16 @@ async def test_schema_auto_migration_rolls_back_after_structure_changes(
         )
         assert (
             connection.execute(
-                "SELECT * FROM engram_vnext_persona_update_log"
+                "SELECT * FROM mnemosyne_vnext_persona_update_log"
             ).fetchall()
             == before_audit
         )
         assert connection.execute(
-            "SELECT version FROM engram_vnext_schema_version"
+            "SELECT version FROM mnemosyne_vnext_schema_version"
         ).fetchone() == (source_version,)
         assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
     assert len(list((tmp_path / "backups").glob("*.db"))) == 1
-    assert not list((tmp_path / "backups").glob("engram-upgrade-*"))
+    assert not list((tmp_path / "backups").glob("mnemosyne-upgrade-*"))
     retried = schema_module.VNextSchema(str(path))
     try:
         await retried.initialize()
@@ -1689,7 +1689,7 @@ async def test_schema_auto_migration_rolls_back_after_structure_changes(
         await retried.close()
     with closing(sqlite3.connect(path)) as connection:
         assert connection.execute(
-            "SELECT version FROM engram_vnext_schema_version"
+            "SELECT version FROM mnemosyne_vnext_schema_version"
         ).fetchone() == (schema_module.SCHEMA_VERSION,)
         assert connection.execute("SELECT body FROM operator_notes").fetchone() == (
             "retained",
@@ -1710,7 +1710,7 @@ async def test_schema_auto_migration_backs_up_committed_wal(tmp_path: Any) -> No
         assert writer.execute("PRAGMA journal_mode=WAL").fetchone() == ("wal",)
         writer.execute("PRAGMA wal_autocheckpoint=0")
         writer.execute(
-            "UPDATE engram_vnext_persona_update_log SET impression_text='WAL中的新稿'"
+            "UPDATE mnemosyne_vnext_persona_update_log SET impression_text='WAL中的新稿'"
         )
         writer.commit()
         assert (tmp_path / "memory.db-wal").stat().st_size > 0
@@ -1718,7 +1718,7 @@ async def test_schema_auto_migration_backs_up_committed_wal(tmp_path: Any) -> No
             sqlite3.connect(f"file:{path.as_posix()}?mode=ro&immutable=1", uri=True)
         ) as main_only:
             assert main_only.execute(
-                "SELECT impression_text FROM engram_vnext_persona_update_log"
+                "SELECT impression_text FROM mnemosyne_vnext_persona_update_log"
             ).fetchone() == ("原印象正文",)
         schema = VNextSchema(str(path))
         try:
@@ -1726,16 +1726,16 @@ async def test_schema_auto_migration_backs_up_committed_wal(tmp_path: Any) -> No
         finally:
             await schema.close()
         assert writer.execute(
-            "SELECT impression_text,seen_revision_ids FROM engram_vnext_persona_update_log"
+            "SELECT impression_text,seen_revision_ids FROM mnemosyne_vnext_persona_update_log"
         ).fetchone() == ("WAL中的新稿", None)
         backups = list((tmp_path / "backups").glob("*.db"))
         assert len(backups) == 1
         with closing(sqlite3.connect(backups[0])) as backup:
             assert backup.execute(
-                "SELECT impression_text FROM engram_vnext_persona_update_log"
+                "SELECT impression_text FROM mnemosyne_vnext_persona_update_log"
             ).fetchone() == ("WAL中的新稿",)
             assert backup.execute(
-                "SELECT version FROM engram_vnext_schema_version"
+                "SELECT version FROM mnemosyne_vnext_schema_version"
             ).fetchone() == (4,)
 
 
@@ -1787,16 +1787,16 @@ async def test_schema_migration_recovers_after_process_exit(
     assert path.read_bytes() == interrupted_bytes
     with closing(sqlite3.connect(path)) as connection:
         assert connection.execute(
-            "SELECT version FROM engram_vnext_schema_version"
+            "SELECT version FROM mnemosyne_vnext_schema_version"
         ).fetchone() == (4,)
         assert "seen_revision_ids" not in {
             row[1]
             for row in connection.execute(
-                "PRAGMA table_info(engram_vnext_persona_update_log)"
+                "PRAGMA table_info(mnemosyne_vnext_persona_update_log)"
             )
         }
         assert connection.execute(
-            "SELECT impression_text FROM engram_vnext_persona_update_log"
+            "SELECT impression_text FROM mnemosyne_vnext_persona_update_log"
         ).fetchone() == ("原印象正文",)
         assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
     assert len(list((tmp_path / "backups").glob("*.db"))) == 1
@@ -1807,10 +1807,10 @@ async def test_schema_migration_recovers_after_process_exit(
         await schema.close()
     with closing(sqlite3.connect(path)) as connection:
         assert connection.execute(
-            "SELECT version FROM engram_vnext_schema_version"
+            "SELECT version FROM mnemosyne_vnext_schema_version"
         ).fetchone() == (SCHEMA_VERSION,)
         assert connection.execute(
-            "SELECT impression_text,seen_revision_ids FROM engram_vnext_persona_update_log"
+            "SELECT impression_text,seen_revision_ids FROM mnemosyne_vnext_persona_update_log"
         ).fetchone() == ("原印象正文", None)
 
 
@@ -1868,10 +1868,10 @@ async def test_schema_unknown_versions_are_not_modified(
     await _create_legacy_persona_database(path, 4)
     with closing(sqlite3.connect(path)) as connection:
         if version is None:
-            connection.execute("DROP TABLE engram_vnext_schema_version")
+            connection.execute("DROP TABLE mnemosyne_vnext_schema_version")
         else:
             connection.execute(
-                "UPDATE engram_vnext_schema_version SET version=?", (version,)
+                "UPDATE mnemosyne_vnext_schema_version SET version=?", (version,)
             )
         connection.commit()
     before = path.read_bytes()
@@ -1932,7 +1932,7 @@ async def test_recent_chat_keeps_speakers_replies_and_total_limit(
         "get_bot_info_by_platform",
         AsyncMock(return_value={"bot_id": "bot-account"}),
     )
-    settings = EngramMemoryConfig().vnext.persona
+    settings = MnemosyneMemoryConfig().vnext.persona
     settings.recent_chat_max_messages = 3
     service = PersonaService(object(), persona_config=settings)  # type: ignore[arg-type]
     blocks = await service._load_recent_chat(
@@ -2185,7 +2185,7 @@ async def test_persona_generation_request_preserves_style_and_uses_preferred_nam
     assert result == {"impression_text": "", "reason": "缺少正式依据"}
     assert len(requests) == 1
     request = requests[0]
-    assert request.request_name == "engram_vnext_persona_update"
+    assert request.request_name == "mnemosyne_vnext_persona_update"
     assert [part.role for part in request.payloads] == [
         ROLE.SYSTEM,
         ROLE.USER,
@@ -2316,7 +2316,7 @@ async def test_persona_read_tool_executes_and_continues_real_response(
         assert results[0].value["memories"][0]["content"] == "完整正文"
         roles = [part.role for part in self.payloads]
         assert roles.index(ROLE.ASSISTANT) < roles.index(ROLE.TOOL_RESULT)
-        assert self.request_name == "engram_vnext_persona_update"
+        assert self.request_name == "mnemosyne_vnext_persona_update"
         return LLMResponse(
             _stream=None,
             _upper=self,
@@ -2567,7 +2567,7 @@ async def test_chat_samples_contiguous_blocks_across_time_with_shared_budget(
         "get_bot_info_by_platform",
         AsyncMock(return_value=None),
     )
-    settings = EngramMemoryConfig().vnext.persona
+    settings = MnemosyneMemoryConfig().vnext.persona
     settings.recent_chat_max_messages = 100
     blocks = await PersonaService(object(), persona_config=settings)._load_recent_chat(  # type: ignore[arg-type]
         SimpleNamespace(platform="test", user_id="a"),

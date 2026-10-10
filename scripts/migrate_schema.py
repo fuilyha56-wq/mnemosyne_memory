@@ -1,4 +1,4 @@
-"""将独立 Engram v1、v2、v3 或 v4 副本迁移到 v5，保留来源库与记忆记录。"""
+"""将独立 Mnemosyne v1、v2、v3 或 v4 副本迁移到 v5，保留来源库与记忆记录。"""
 
 from __future__ import annotations
 
@@ -32,24 +32,24 @@ def _resolve_project_path(path: Path) -> Path:
 
 def _configured_production_path() -> Path:
     """返回配置指向的生产数据库路径，只读取路径字段。"""
-    default_path = ROOT / "data/engram_memory/vnext.db"
-    config_path = ROOT / "config/plugins/engram_memory/config.toml"
+    default_path = ROOT / "data/mnemosyne_memory/vnext.db"
+    config_path = ROOT / "config/plugins/mnemosyne_memory/config.toml"
     if not config_path.is_file():
         return default_path.resolve()
     try:
         with config_path.open("rb") as handle:
             config = tomllib.load(handle)
     except (OSError, tomllib.TOMLDecodeError) as error:
-        raise ValueError("无法安全读取 Engram 数据库路径") from error
+        raise ValueError("无法安全读取 Mnemosyne 数据库路径") from error
 
     storage = config.get("storage", {})
     if not isinstance(storage, dict):
-        raise ValueError("Engram 存储配置格式无效")
+        raise ValueError("Mnemosyne 存储配置格式无效")
     configured_path = storage.get("vnext_db_path")
     if configured_path is None:
         return default_path.resolve()
     if not isinstance(configured_path, str) or not configured_path.strip():
-        raise ValueError("Engram 数据库路径配置无效")
+        raise ValueError("Mnemosyne 数据库路径配置无效")
     path = Path(configured_path)
     return (path if path.is_absolute() else ROOT / path).resolve()
 
@@ -60,7 +60,7 @@ def _validate_paths(source: Path, target: Path) -> tuple[Path, Path]:
     target = _resolve_project_path(target)
     production_path = _configured_production_path()
     if source == production_path or target == production_path:
-        raise ValueError("来源和目标必须避开当前配置使用的 Engram 数据库")
+        raise ValueError("来源和目标必须避开当前配置使用的 Mnemosyne 数据库")
     if not source.is_file():
         raise ValueError("来源必须是独立数据库文件")
     if source == target or target.exists():

@@ -64,13 +64,17 @@ class DiaryConfig(SectionBase):
     group: GroupDiaryPolicy = Field(default_factory=GroupDiaryPolicy)
     private: PrivateDiaryPolicy = Field(default_factory=PrivateDiaryPolicy)
     database_path: str = Field(
-        default="data/engram_memory/chat_diary.db",
+        default="data/mnemosyne_memory/chat_diary.db",
         description="独立日记数据库路径",
     )
     timezone: str = Field(default="Asia/Shanghai", description="日记自然日所属时区")
     model_task: str = Field(
         default="actor", min_length=1,
         description="日记生成使用的模型任务名，对应核心模型配置中的任务",
+    )
+    episode_export_enabled: bool = Field(
+        default=True,
+        description="将已保存日记作为低置信度经历索引投递，不直接创建正式记忆",
     )
     max_concurrency: int = Field(
         default=3, ge=1, description="不同聊天流的生成并发上限"

@@ -5,7 +5,7 @@ from __future__ import annotations
 from src.app.plugin_system.api import log_api, prompt_api, router_api
 from src.app.plugin_system.base import BasePlugin, register_plugin
 
-from .config import EngramMemoryConfig
+from .config import MnemosyneMemoryConfig
 from .diary.events import ChatDiaryEventHandler
 from .prompts import MEMORY_GUIDE_REMINDER
 from .router.memory_admin_router import VNextMemoryAdminRouter
@@ -32,22 +32,22 @@ from .vnext.runtime_components import (
 )
 from .vnext.runtime_owner import VNextRuntimeOwner
 
-logger = log_api.get_logger("engram_memory.plugin")
+logger = log_api.get_logger("mnemosyne_memory.plugin")
 
 
 @register_plugin
-class EngramMemoryPlugin(BasePlugin):
-    """装配 Engram Memory vNext 的唯一插件 Owner。"""
+class MnemosyneMemoryPlugin(BasePlugin):
+    """装配 Mnemosyne Memory vNext 的唯一插件 Owner。"""
 
-    plugin_name: str = "engram_memory"
-    configs: list[type] = [EngramMemoryConfig]
+    plugin_name: str = "mnemosyne_memory"
+    configs: list[type] = [MnemosyneMemoryConfig]
     dependent_components: list[str] = []
 
-    def __init__(self, config: EngramMemoryConfig | None = None) -> None:
+    def __init__(self, config: MnemosyneMemoryConfig | None = None) -> None:
         """初始化插件及其延迟创建的 Runtime Owner。"""
-        if config is not None and not isinstance(config, EngramMemoryConfig):
+        if config is not None and not isinstance(config, MnemosyneMemoryConfig):
             # 热重载后的配置缓存可能仍属于旧模块中的同名配置类。
-            config = EngramMemoryConfig.model_validate(config.model_dump())
+            config = MnemosyneMemoryConfig.model_validate(config.model_dump())
         super().__init__(config)
         self.runtime_owner: VNextRuntimeOwner | None = None
         self._unloading = False
@@ -58,7 +58,7 @@ class EngramMemoryPlugin(BasePlugin):
     def get_components(self) -> list[type]:
         """返回正式记忆查询工具、写操作、事件处理器、服务与管理路由。"""
         if (
-            isinstance(self.config, EngramMemoryConfig)
+            isinstance(self.config, MnemosyneMemoryConfig)
             and not self.config.plugin.enabled
         ):
             return []
@@ -86,7 +86,7 @@ class EngramMemoryPlugin(BasePlugin):
     async def on_plugin_loaded(self) -> None:
         """初始化共享运行资源，刷新管理路由并注册记忆引导语。"""
         if (
-            isinstance(self.config, EngramMemoryConfig)
+            isinstance(self.config, MnemosyneMemoryConfig)
             and not self.config.plugin.enabled
         ):
             return
@@ -109,7 +109,7 @@ class EngramMemoryPlugin(BasePlugin):
         try:
             prompt_api.add_system_reminder(
                 bucket="actor",
-                name="engram_memory_guide",
+                name="mnemosyne_memory_guide",
                 content=MEMORY_GUIDE_REMINDER,
                 insert_type=(
                     prompt_api.SystemReminderInsertType.DYNAMIC
@@ -121,9 +121,9 @@ class EngramMemoryPlugin(BasePlugin):
         except Exception as error:  # noqa: BLE001
             logger.warning(f"注册 vNext 记忆引导语失败: {error}")
         if not reminder_registered:
-            logger.debug("Engram Memory 引导语未注册")
+            logger.debug("Mnemosyne Memory 引导语未注册")
         logger.info(
-            f"Engram Memory 已初始化，组件={len(self.get_components())}，日记已就绪"
+            f"Mnemosyne Memory 已初始化，组件={len(self.get_components())}，日记已就绪"
         )
 
     async def on_plugin_unloaded(self) -> None:
@@ -158,9 +158,9 @@ class EngramMemoryPlugin(BasePlugin):
                     self.runtime_owner = None
         finally:
             try:
-                delete_owned_reminder("actor", "engram_memory_guide")
+                delete_owned_reminder("actor", "mnemosyne_memory_guide")
             except Exception as error:  # noqa: BLE001
                 logger.debug(f"移除 vNext 记忆引导语失败: {error}")
 
 
-__all__ = ["EngramMemoryPlugin"]
+__all__ = ["MnemosyneMemoryPlugin"]

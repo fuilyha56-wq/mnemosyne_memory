@@ -1,1 +1,1 @@
-"""engram_memory 测试。"""
+"""mnemosyne_memory 测试。"""

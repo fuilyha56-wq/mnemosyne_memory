@@ -1,4 +1,4 @@
-"""Engram Memory vNext 向量派生索引服务。"""
+"""Mnemosyne Memory vNext 向量派生索引服务。"""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ from .schema import VNextSchema
 MAX_OUTBOX_ATTEMPTS = 3
 PROCESSING_STALE_SECONDS = 300
 DEFAULT_VECTOR_UPSERT_BATCH_SIZE = 32
-UNAVAILABLE_EMBEDDING_MODEL_ID = "engram:embedding-unavailable"
+UNAVAILABLE_EMBEDDING_MODEL_ID = "mnemosyne:embedding-unavailable"
 
 
 @dataclass(frozen=True, slots=True)

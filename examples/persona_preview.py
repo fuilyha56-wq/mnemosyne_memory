@@ -26,7 +26,7 @@ from src.kernel.llm import LLMRequest, ModelEntry, ModelSet
 from src.kernel.llm.model_client import ModelClientRegistry
 from src.kernel.llm.model_client.shared import build_httpx_timeout
 
-from ..config import EngramMemoryConfig
+from ..config import MnemosyneMemoryConfig
 from ..vnext.persona_service import (
     MEMORY_FOOTNOTE_SEPARATOR,
     MEMORY_REFERENCE,
@@ -39,7 +39,7 @@ from ..vnext.schema_migration import _table_hash, migrate_snapshot
 
 ROOT = Path(__file__).resolve().parents[3]
 PREVIEW_TIMEOUT = 200.0
-CONFIG_PATHS = ("core.toml", "model.toml", "plugins/engram_memory/config.toml")
+CONFIG_PATHS = ("core.toml", "model.toml", "plugins/mnemosyne_memory/config.toml")
 
 
 def read_config(path: str) -> dict[str, Any]:
@@ -123,10 +123,10 @@ async def preview(account: str, *, check_only: bool) -> None:
     }
     core_data = read_config("core.toml")
     model_data = read_config("model.toml")
-    plugin_data = read_config("plugins/engram_memory/config.toml")
+    plugin_data = read_config("plugins/mnemosyne_memory/config.toml")
     core = core_config.CoreConfig.model_validate(core_data)
     models = model_config.ModelConfig.model_validate(model_data)
-    plugin = EngramMemoryConfig.from_dict(plugin_data)
+    plugin = MnemosyneMemoryConfig.from_dict(plugin_data)
     database = core_data["database"]
     if database["database_type"] != "postgresql":
         raise ValueError("正式人物库不属于预期的 PostgreSQL 数据库")
@@ -157,14 +157,14 @@ async def preview(account: str, *, check_only: bool) -> None:
             }
         },
     )
-    with tempfile.TemporaryDirectory(prefix="engram-persona-preview-") as directory:
+    with tempfile.TemporaryDirectory(prefix="mnemosyne-persona-preview-") as directory:
         print("TEMP_DIRECTORY " + directory, flush=True)
         snapshot = Path(directory) / "source.db"
         candidate = Path(directory) / "schema.db"
         before = copy_source(source, snapshot)
         with closing(sqlite3.connect(snapshot)) as connection:
             schema_version = connection.execute(
-                "SELECT version FROM engram_vnext_schema_version WHERE schema_key=?",
+                "SELECT version FROM mnemosyne_vnext_schema_version WHERE schema_key=?",
                 (SCHEMA_KEY,),
             ).fetchone()[0]
         if schema_version in {3, 4}:
@@ -264,7 +264,7 @@ async def preview(account: str, *, check_only: bool) -> None:
                         """仅复制预览请求模型配置并关闭统计写入。"""
                         if (
                             keywords.get("request_name")
-                            != "engram_vnext_persona_update"
+                            != "mnemosyne_vnext_persona_update"
                         ):
                             raise ValueError("超时覆盖仅适用于指定人物预览请求")
                         if "with_reminder" in keywords or "stream_id" in keywords:

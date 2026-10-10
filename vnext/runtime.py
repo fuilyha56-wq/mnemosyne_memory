@@ -26,8 +26,8 @@ from .schema import VNextSchema
 from .vector_service import VectorIndexService, VectorSink
 
 DEFAULT_EMBEDDING_MODEL_TASK: str = "embedding"
-DEFAULT_VECTOR_COLLECTION: str = "engram_vnext_retrieval"
-DEFAULT_EMBEDDING_REQUEST_NAME: str = "engram_vnext_embedding"
+DEFAULT_VECTOR_COLLECTION: str = "mnemosyne_vnext_retrieval"
+DEFAULT_EMBEDDING_REQUEST_NAME: str = "mnemosyne_vnext_embedding"
 DEFAULT_VECTOR_DB_PATH: str = "data/chroma_db"
 
 MessageLike = Message | Mapping[str, object]
@@ -258,7 +258,7 @@ class ChromaVectorSink(VectorSink):
             :12
         ]
         index_token = hashlib.sha256(index_id.encode("utf-8")).hexdigest()[:12]
-        return f"engram_vnext_{index_token}_{model_token}_{embedding_dimension}"
+        return f"mnemosyne_vnext_{index_token}_{model_token}_{embedding_dimension}"
 
     def for_index(
         self,
@@ -326,7 +326,7 @@ class ChromaVectorSink(VectorSink):
     async def inspect_embedding_settings(self) -> tuple[str, int]:
         """返回模型任务标识与一次真实响应的向量维度。"""
         identity = self.embedding_model_identity()
-        embedding = await self.embed_text("engram-vnext-runtime-preflight")
+        embedding = await self.embed_text("mnemosyne-vnext-runtime-preflight")
         return identity, len(embedding)
 
     async def embed_text(self, text: str) -> list[float]:
@@ -499,7 +499,7 @@ class VectorOutboxWorker:
         batch_size: int = 20,
         poll_interval_seconds: float = 60.0,
         retry_failed: bool = False,
-        task_name: str = "engram_vnext_vector_outbox_worker",
+        task_name: str = "mnemosyne_vnext_vector_outbox_worker",
     ) -> None:
         """绑定向量服务或数据库与向量接口，自动轮询仅处理待投递入口。
 

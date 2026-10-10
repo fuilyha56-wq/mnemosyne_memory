@@ -1,4 +1,4 @@
-"""Engram Memory vNext 规范数据只读仓储。"""
+"""Mnemosyne Memory vNext 规范数据只读仓储。"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Engram Memory vNext 人物印象派生领域服务。"""
+"""Mnemosyne Memory vNext 人物印象派生领域服务。"""
 
 from __future__ import annotations
 
@@ -855,7 +855,7 @@ class PersonaService:
         )
         request = llm_api.create_llm_request(
             llm_api.get_model_set_by_task("actor"),
-            request_name="engram_vnext_persona_update",
+            request_name="mnemosyne_vnext_persona_update",
         )
         request.add_payload(LLMPayload(ROLE.SYSTEM, Text(system_prompt)))
         request.add_payload(LLMPayload(ROLE.USER, Text(payload)))

@@ -15,13 +15,13 @@ from .persona_service import EMPTY_IMPRESSION
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from ..plugin import EngramMemoryPlugin
+    from ..plugin import MnemosyneMemoryPlugin
     from .persona_service import PersonaService
 
 
-REMINDER_NAME = "engram_memory_private_persona"
-GROUP_REMINDER_NAME = "engram_memory_group_persona"
-_INTERNAL_REQUEST_NAMES = {"engram_chat_diary_update", "engram_vnext_persona_update"}
+REMINDER_NAME = "mnemosyne_memory_private_persona"
+GROUP_REMINDER_NAME = "mnemosyne_memory_group_persona"
+_INTERNAL_REQUEST_NAMES = {"mnemosyne_chat_diary_update", "mnemosyne_vnext_persona_update"}
 
 
 def _is_named_reminder(part: object, name: str) -> bool:
@@ -40,7 +40,7 @@ def _uses_memory_reminders(payloads: Sequence[LLMPayload]) -> bool:
     return any(
         payload.role == ROLE.USER
         and any(
-            _is_named_reminder(part, "engram_memory_guide")
+            _is_named_reminder(part, "mnemosyne_memory_guide")
             or _is_named_reminder(part, REMINDER_NAME)
             or _is_named_reminder(part, GROUP_REMINDER_NAME)
             for part in payload.content
@@ -94,7 +94,7 @@ class VNextPrivatePersonaEventHandler(BaseEventHandler):
         params: dict[str, Any],
     ) -> tuple[EventDecision, dict[str, Any]]:
         """预载聊天流印象，并刷新实际 Actor 请求中的同名提醒。"""
-        plugin = cast("EngramMemoryPlugin", self.plugin)
+        plugin = cast("MnemosyneMemoryPlugin", self.plugin)
         owner = plugin.runtime_owner
         if owner is None or plugin._unloading:
             return EventDecision.SUCCESS, params
@@ -124,7 +124,7 @@ class VNextPrivatePersonaEventHandler(BaseEventHandler):
 
     @staticmethod
     async def _load_reminder(
-        plugin: EngramMemoryPlugin,
+        plugin: MnemosyneMemoryPlugin,
         service: PersonaService,
         stream_id: str,
     ) -> str:
@@ -179,7 +179,7 @@ class VNextGroupPersonaEventHandler(BaseEventHandler):
         self, event_name: str, params: dict[str, Any]
     ) -> tuple[EventDecision, dict[str, Any]]:
         """刷新当前群聊的参与者印象，不触发人物生成。"""
-        plugin = cast("EngramMemoryPlugin", self.plugin)
+        plugin = cast("MnemosyneMemoryPlugin", self.plugin)
         owner = plugin.runtime_owner
         if (
             owner is None

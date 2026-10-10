@@ -91,7 +91,7 @@ class ChatDiaryEventHandler(BaseEventHandler):
     ) -> None:
         """只刷新带 Actor 日记标记且属于聊天流的实际请求 payload。"""
         request_name = params.get("request_name")
-        if request_name in {"engram_chat_diary_update", "engram_vnext_persona_update"}:
+        if request_name in {"mnemosyne_chat_diary_update", "mnemosyne_vnext_persona_update"}:
             return
         meta_data = params.get("meta_data")
         if not isinstance(meta_data, dict):

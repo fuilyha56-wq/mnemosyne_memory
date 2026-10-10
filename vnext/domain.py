@@ -1,4 +1,4 @@
-"""Engram Memory vNext 领域输入与结果类型。"""
+"""Mnemosyne Memory vNext 领域输入与结果类型。"""
 
 from __future__ import annotations
 

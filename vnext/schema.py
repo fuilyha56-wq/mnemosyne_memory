@@ -1,4 +1,4 @@
-"""Engram Memory vNext Schema 初始化与版本校验。"""
+"""Mnemosyne Memory vNext Schema 初始化与版本校验。"""
 
 from __future__ import annotations
 
@@ -17,15 +17,15 @@ from src.app.plugin_system.api.storage_api import PluginDatabase
 
 from .models import ALL_MODELS, SchemaVersionModel
 
-SCHEMA_KEY = "engram_memory_vnext"
+SCHEMA_KEY = "mnemosyne_memory_vnext"
 SCHEMA_VERSION = 7
 
 
 def create_episode_tables(connection: sqlite3.Connection) -> None:
-    """为已有 Engram 数据库追加 Episode-first 旁路表。"""
+    """为已有 Mnemosyne 数据库追加 Episode-first 旁路表。"""
     connection.executescript(
         """
-        CREATE TABLE IF NOT EXISTS engram_vnext_episode (
+        CREATE TABLE IF NOT EXISTS mnemosyne_vnext_episode (
             episode_id VARCHAR(36) PRIMARY KEY,
             source_ref TEXT UNIQUE,
             stream_id TEXT NOT NULL,
@@ -42,34 +42,34 @@ def create_episode_tables(connection: sqlite3.Connection) -> None:
             episode_kind VARCHAR(32) NOT NULL,
             created_at VARCHAR(32) NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_engram_vnext_episode_stream_time
-            ON engram_vnext_episode(stream_id, observed_at);
-        CREATE INDEX IF NOT EXISTS idx_engram_vnext_episode_kind
-            ON engram_vnext_episode(episode_kind, created_at);
-        CREATE TABLE IF NOT EXISTS engram_vnext_cue_set (
+        CREATE INDEX IF NOT EXISTS idx_mnemosyne_vnext_episode_stream_time
+            ON mnemosyne_vnext_episode(stream_id, observed_at);
+        CREATE INDEX IF NOT EXISTS idx_mnemosyne_vnext_episode_kind
+            ON mnemosyne_vnext_episode(episode_kind, created_at);
+        CREATE TABLE IF NOT EXISTS mnemosyne_vnext_cue_set (
             cue_id VARCHAR(36) PRIMARY KEY,
-            episode_id VARCHAR(36) REFERENCES engram_vnext_episode(episode_id),
+            episode_id VARCHAR(36) REFERENCES mnemosyne_vnext_episode(episode_id),
             stream_id TEXT NOT NULL,
             hard_cues JSON NOT NULL,
             soft_cues JSON NOT NULL,
             created_at VARCHAR(32) NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_engram_vnext_cue_stream_time
-            ON engram_vnext_cue_set(stream_id, created_at);
-        CREATE TABLE IF NOT EXISTS engram_vnext_episode_relation (
+        CREATE INDEX IF NOT EXISTS idx_mnemosyne_vnext_cue_stream_time
+            ON mnemosyne_vnext_cue_set(stream_id, created_at);
+        CREATE TABLE IF NOT EXISTS mnemosyne_vnext_episode_relation (
             relation_id VARCHAR(36) PRIMARY KEY,
-            source_episode_id VARCHAR(36) NOT NULL REFERENCES engram_vnext_episode(episode_id),
-            target_episode_id VARCHAR(36) NOT NULL REFERENCES engram_vnext_episode(episode_id),
+            source_episode_id VARCHAR(36) NOT NULL REFERENCES mnemosyne_vnext_episode(episode_id),
+            target_episode_id VARCHAR(36) NOT NULL REFERENCES mnemosyne_vnext_episode(episode_id),
             relation_type VARCHAR(32) NOT NULL,
             weight FLOAT NOT NULL,
             created_at VARCHAR(32) NOT NULL,
             UNIQUE(source_episode_id, target_episode_id, relation_type)
         );
-        CREATE INDEX IF NOT EXISTS idx_engram_vnext_episode_relation_source
-            ON engram_vnext_episode_relation(source_episode_id);
-        CREATE INDEX IF NOT EXISTS idx_engram_vnext_episode_relation_target
-            ON engram_vnext_episode_relation(target_episode_id);
-        CREATE TABLE IF NOT EXISTS engram_vnext_working_memory (
+        CREATE INDEX IF NOT EXISTS idx_mnemosyne_vnext_episode_relation_source
+            ON mnemosyne_vnext_episode_relation(source_episode_id);
+        CREATE INDEX IF NOT EXISTS idx_mnemosyne_vnext_episode_relation_target
+            ON mnemosyne_vnext_episode_relation(target_episode_id);
+        CREATE TABLE IF NOT EXISTS mnemosyne_vnext_working_memory (
             working_memory_id VARCHAR(36) PRIMARY KEY,
             stream_id TEXT NOT NULL,
             cue_id VARCHAR(36) NOT NULL,
@@ -78,9 +78,9 @@ def create_episode_tables(connection: sqlite3.Connection) -> None:
             created_at VARCHAR(32) NOT NULL,
             expires_at VARCHAR(32) NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_engram_vnext_working_memory_stream
-            ON engram_vnext_working_memory(stream_id, created_at);
-        CREATE TABLE IF NOT EXISTS engram_vnext_memory_update_proposal (
+        CREATE INDEX IF NOT EXISTS idx_mnemosyne_vnext_working_memory_stream
+            ON mnemosyne_vnext_working_memory(stream_id, created_at);
+        CREATE TABLE IF NOT EXISTS mnemosyne_vnext_memory_update_proposal (
             proposal_id VARCHAR(36) PRIMARY KEY,
             stream_id TEXT NOT NULL,
             claim TEXT NOT NULL,
@@ -92,11 +92,11 @@ def create_episode_tables(connection: sqlite3.Connection) -> None:
             created_at VARCHAR(32) NOT NULL,
             reviewed_at VARCHAR(32)
         );
-        CREATE INDEX IF NOT EXISTS idx_engram_vnext_proposal_status
-            ON engram_vnext_memory_update_proposal(status, created_at);
-        CREATE TABLE IF NOT EXISTS engram_vnext_episode_semantic (
+        CREATE INDEX IF NOT EXISTS idx_mnemosyne_vnext_proposal_status
+            ON mnemosyne_vnext_memory_update_proposal(status, created_at);
+        CREATE TABLE IF NOT EXISTS mnemosyne_vnext_episode_semantic (
             semantic_id VARCHAR(36) PRIMARY KEY,
-            episode_id VARCHAR(36) NOT NULL REFERENCES engram_vnext_episode(episode_id),
+            episode_id VARCHAR(36) NOT NULL REFERENCES mnemosyne_vnext_episode(episode_id),
             referenced_episode_ids JSON NOT NULL,
             entities JSON NOT NULL,
             events JSON NOT NULL,
@@ -104,9 +104,9 @@ def create_episode_tables(connection: sqlite3.Connection) -> None:
             confidence FLOAT NOT NULL,
             created_at VARCHAR(32) NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_engram_vnext_episode_semantic_episode
-            ON engram_vnext_episode_semantic(episode_id);
-        CREATE TABLE IF NOT EXISTS engram_vnext_claim_hypothesis (
+        CREATE INDEX IF NOT EXISTS idx_mnemosyne_vnext_episode_semantic_episode
+            ON mnemosyne_vnext_episode_semantic(episode_id);
+        CREATE TABLE IF NOT EXISTS mnemosyne_vnext_claim_hypothesis (
             item_id VARCHAR(36) PRIMARY KEY,
             stream_id TEXT NOT NULL,
             kind VARCHAR(16) NOT NULL CHECK (kind IN ('CLAIM', 'HYPOTHESIS')),
@@ -127,8 +127,8 @@ def create_episode_tables(connection: sqlite3.Connection) -> None:
             created_at VARCHAR(32) NOT NULL,
             reviewed_at VARCHAR(32)
         );
-        CREATE INDEX IF NOT EXISTS idx_engram_vnext_claim_stream_status
-            ON engram_vnext_claim_hypothesis(stream_id, status, created_at);
+        CREATE INDEX IF NOT EXISTS idx_mnemosyne_vnext_claim_stream_status
+            ON mnemosyne_vnext_claim_hypothesis(stream_id, status, created_at);
         """
     )
 
@@ -136,28 +136,28 @@ def create_episode_tables(connection: sqlite3.Connection) -> None:
 def upgrade_persona_audit(connection: sqlite3.Connection, source_version: int) -> None:
     """在调用者事务内升级已知人物审查结构及版本，不改写历史内容。"""
     if source_version not in {2, 3, 4, 5, 6}:
-        raise RuntimeError(f"不支持自动升级的 Engram Schema: {source_version}")
+        raise RuntimeError(f"不支持自动升级的 Mnemosyne Schema: {source_version}")
     if source_version in {2, 3}:
         connection.execute(
-            "ALTER TABLE engram_vnext_persona_update_log ADD COLUMN generator_version TEXT"
+            "ALTER TABLE mnemosyne_vnext_persona_update_log ADD COLUMN generator_version TEXT"
         )
         connection.execute(
-            "ALTER TABLE engram_vnext_persona_update_log ADD COLUMN revision_no INTEGER "
+            "ALTER TABLE mnemosyne_vnext_persona_update_log ADD COLUMN revision_no INTEGER "
             "CHECK (revision_no >= 1)"
         )
         connection.execute(
-            "ALTER TABLE engram_vnext_persona_update_log ADD COLUMN impression_text TEXT"
+            "ALTER TABLE mnemosyne_vnext_persona_update_log ADD COLUMN impression_text TEXT"
         )
         connection.execute(
-            "CREATE UNIQUE INDEX uq_engram_vnext_persona_revision "
-            "ON engram_vnext_persona_update_log(person_id, revision_no)"
+            "CREATE UNIQUE INDEX uq_mnemosyne_vnext_persona_revision "
+            "ON mnemosyne_vnext_persona_update_log(person_id, revision_no)"
         )
     if source_version in {2, 3, 4}:
         connection.execute(
-            "ALTER TABLE engram_vnext_persona_update_log ADD COLUMN seen_revision_ids JSON"
+            "ALTER TABLE mnemosyne_vnext_persona_update_log ADD COLUMN seen_revision_ids JSON"
         )
     updated = connection.execute(
-        "UPDATE engram_vnext_schema_version SET version=?, applied_at=? "
+        "UPDATE mnemosyne_vnext_schema_version SET version=?, applied_at=? "
         "WHERE schema_key=? AND version=?",
         (
             SCHEMA_VERSION,
@@ -167,7 +167,7 @@ def upgrade_persona_audit(connection: sqlite3.Connection, source_version: int) -
         ),
     )
     if updated.rowcount != 1:
-        raise RuntimeError("Engram Schema 版本记录不唯一或已变化")
+        raise RuntimeError("Mnemosyne Schema 版本记录不唯一或已变化")
 
 
 class VNextSchema:
@@ -187,7 +187,7 @@ class VNextSchema:
         """在副本上识别已知结构，拒绝未知版本及缺少版本记录的已有库。"""
         if not self._db_path.is_file():
             return
-        with tempfile.TemporaryDirectory(prefix="engram-schema-") as directory:
+        with tempfile.TemporaryDirectory(prefix="mnemosyne-schema-") as directory:
             probe = Path(directory) / "probe.db"
             shutil.copyfile(self._db_path, probe)
             for suffix in ("-wal", "-shm", "-journal"):
@@ -197,7 +197,7 @@ class VNextSchema:
             with closing(sqlite3.connect(probe)) as connection:
                 exists = connection.execute(
                     "SELECT 1 FROM sqlite_master WHERE type='table' "
-                    "AND name='engram_vnext_schema_version'"
+                    "AND name='mnemosyne_vnext_schema_version'"
                 ).fetchone()
                 if exists is None:
                     if (
@@ -207,16 +207,16 @@ class VNextSchema:
                         is not None
                     ):
                         raise RuntimeError(
-                            "已有数据库缺少 Engram Schema 版本，拒绝隐式适配"
+                            "已有数据库缺少 Mnemosyne Schema 版本，拒绝隐式适配"
                         )
                     return
                 row = connection.execute(
-                    "SELECT version FROM engram_vnext_schema_version WHERE schema_key=?",
+                    "SELECT version FROM mnemosyne_vnext_schema_version WHERE schema_key=?",
                     (SCHEMA_KEY,),
                 ).fetchone()
                 if row is None or row[0] not in {1, 2, 3, 4, 5, 6, SCHEMA_VERSION}:
                     raise RuntimeError(
-                        "不支持的 Engram Schema 版本，拒绝自动修改未知结构"
+                        "不支持的 Mnemosyne Schema 版本，拒绝自动修改未知结构"
                     )
                 return int(row[0])
 
@@ -232,15 +232,15 @@ class VNextSchema:
             with connection:
                 connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute(
-                    "SELECT version FROM engram_vnext_schema_version WHERE schema_key=?",
+                    "SELECT version FROM mnemosyne_vnext_schema_version WHERE schema_key=?",
                     (SCHEMA_KEY,),
                 ).fetchone()
                 if row == (SCHEMA_VERSION,):
                     return
                 if row != (source_version,):
-                    raise RuntimeError("Engram 数据库版本在迁移前已变化")
+                    raise RuntimeError("Mnemosyne 数据库版本在迁移前已变化")
                 if connection.execute("PRAGMA integrity_check").fetchone() != ("ok",):
-                    raise RuntimeError("Engram 数据库完整性检查失败，拒绝自动迁移")
+                    raise RuntimeError("Mnemosyne 数据库完整性检查失败，拒绝自动迁移")
                 backup_dir = self._db_path.parent / "backups"
                 backup_dir.mkdir(parents=True, exist_ok=True)
                 backup_path = backup_dir / (
@@ -255,7 +255,7 @@ class VNextSchema:
                             if backup.execute("PRAGMA integrity_check").fetchone() != (
                                 "ok",
                             ):
-                                raise RuntimeError("Engram 自动迁移备份完整性检查失败")
+                                raise RuntimeError("Mnemosyne 自动迁移备份完整性检查失败")
                 except BaseException:
                     backup_path.unlink(missing_ok=True)
                     raise
@@ -268,9 +268,9 @@ class VNextSchema:
                     connection.execute("PRAGMA foreign_key_check").fetchone()
                     is not None
                 ):
-                    raise RuntimeError("Engram 自动迁移后外键检查失败")
+                    raise RuntimeError("Mnemosyne 自动迁移后外键检查失败")
                 if connection.execute("PRAGMA integrity_check").fetchone() != ("ok",):
-                    raise RuntimeError("Engram 自动迁移后完整性检查失败")
+                    raise RuntimeError("Mnemosyne 自动迁移后完整性检查失败")
 
     def _upgrade_legacy(
         self, connection: sqlite3.Connection, backup_path: Path
@@ -279,7 +279,7 @@ class VNextSchema:
         from .schema_migration import _quote_identifier, migrate_snapshot
 
         with tempfile.TemporaryDirectory(
-            prefix="engram-upgrade-", dir=backup_path.parent
+            prefix="mnemosyne-upgrade-", dir=backup_path.parent
         ) as directory:
             staged_path = Path(directory) / "migrated.db"
             migrate_snapshot(backup_path, staged_path)
@@ -296,7 +296,7 @@ class VNextSchema:
                     "SELECT name FROM sqlite_master WHERE type='table'"
                 ).fetchall()
                 for (table,) in old_tables:
-                    if table.startswith("engram_vnext_"):
+                    if table.startswith("mnemosyne_vnext_"):
                         connection.execute(f"DROP TABLE {_quote_identifier(table)}")
                 for table, definition in tables:
                     connection.execute(definition)
@@ -336,7 +336,7 @@ class VNextSchema:
                 )
             elif current.version != SCHEMA_VERSION:
                 raise RuntimeError(
-                    f"不支持的 Engram vNext Schema 版本: {current.version}，"
+                    f"不支持的 Mnemosyne vNext Schema 版本: {current.version}，"
                     f"当前代码要求 {SCHEMA_VERSION}"
                 )
 

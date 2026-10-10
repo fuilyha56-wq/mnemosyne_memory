@@ -1,4 +1,4 @@
-"""Engram Memory vNext 正式记忆领域服务。"""
+"""Mnemosyne Memory vNext 正式记忆领域服务。"""
 
 from __future__ import annotations
 

@@ -16,8 +16,8 @@ from .persona_service import PersonaService
 from .repository import MemoryRepository
 
 logger = log_api.get_logger(
-    "engram_memory.vnext.persona_updater",
-    display="Engram 记忆",
+    "mnemosyne_memory.vnext.persona_updater",
+    display="Mnemosyne 记忆",
     color=log_api.COLOR.CYAN,
 )
 
@@ -55,7 +55,7 @@ class PersonaUpdater:
         if self._bootstrap is None:
             self._bootstrap = create_managed_task(
                 self._scan_missing(),
-                name="engram_memory_persona_bootstrap",
+                name="mnemosyne_memory_persona_bootstrap",
                 daemon=True,
             )
 
@@ -88,7 +88,7 @@ class PersonaUpdater:
         ):
             self._task = create_managed_task(
                 self._run(),
-                name="engram_memory_persona_updater",
+                name="mnemosyne_memory_persona_updater",
                 daemon=True,
             )
 
@@ -170,7 +170,7 @@ class PersonaUpdater:
                     batch = tuple(dict.fromkeys(self._pending.pop(person_id)))
                     self._running[person_id] = create_managed_task(
                         self._refresh_person(person_id, batch),
-                        name=f"engram_memory_persona_update_{person_id}",
+                        name=f"mnemosyne_memory_persona_update_{person_id}",
                         daemon=True,
                     )
                 if not self._running:
@@ -198,7 +198,7 @@ class PersonaUpdater:
             if attempt <= 2 and not self._closed:
                 self._retries[person_id] = create_managed_task(
                     self._retry_after(person_id, attempt),
-                    name=f"engram_memory_persona_retry_{person_id}",
+                    name=f"mnemosyne_memory_persona_retry_{person_id}",
                     daemon=True,
                 )
         finally:

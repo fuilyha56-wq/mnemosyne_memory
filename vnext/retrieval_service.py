@@ -1,4 +1,4 @@
-"""Engram Memory vNext 混合检索领域服务。"""
+"""Mnemosyne Memory vNext 混合检索领域服务。"""
 
 from __future__ import annotations
 

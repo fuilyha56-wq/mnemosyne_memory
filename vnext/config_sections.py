@@ -318,13 +318,13 @@ class Neo4jSection(SectionBase):
     uri: str = Field(
         default="bolt://127.0.0.1:7687",
         input_type="text",
-        description="设置环境变量 ENGRAM_NEO4J_URI 时优先使用环境变量",
+        description="设置环境变量 MNEMOSYNE_NEO4J_URI 时优先使用环境变量",
     )
     user: str = Field(default="neo4j", input_type="text")
     password: str = Field(
         default="",
         input_type="password",
-        description="设置环境变量 ENGRAM_NEO4J_PASSWORD 时优先使用环境变量",
+        description="设置环境变量 MNEMOSYNE_NEO4J_PASSWORD 时优先使用环境变量",
     )
     database: str = Field(default="neo4j", input_type="text")
 
@@ -361,12 +361,12 @@ class VectorSection(SectionBase):
 
 @config_section(
     "vnext",
-    title="Engram Memory vNext",
-    description="Engram Memory 正式记忆、人物印象与自然闪回",
+    title="Mnemosyne Memory vNext",
+    description="Mnemosyne Memory 正式记忆、人物印象与自然闪回",
     tag="ai",
 )
 class VNextConfig(SectionBase):
-    """Engram Memory vNext 认知记忆配置模型。"""
+    """Mnemosyne Memory vNext 认知记忆配置模型。"""
 
     persona: PersonaSection = Field(default_factory=PersonaSection)
     retrieval: VNextRetrievalSection = Field(default_factory=VNextRetrievalSection)

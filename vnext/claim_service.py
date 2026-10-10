@@ -171,7 +171,7 @@ class ClaimHypothesisService:
             },)
             reference_confidence = 1.0 if explicit_ids else 0.85 if referenced else 0.45
             semantic = EpisodeSemanticModel(
-                semantic_id=str(uuid5(NAMESPACE_URL, f"engram:semantic:{episode_id}")),
+                semantic_id=str(uuid5(NAMESPACE_URL, f"mnemosyne:semantic:{episode_id}")),
                 episode_id=episode_id,
                 referenced_episode_ids=[item.episode_id for item in referenced],
                 entities=entities,
@@ -198,7 +198,7 @@ class ClaimHypothesisService:
         created: list[str] = []
         async with self._schema.database.session() as session:
             for proposal in proposals:
-                item_id = str(uuid5(NAMESPACE_URL, f"engram:claim:{proposal['proposal_id']}"))
+                item_id = str(uuid5(NAMESPACE_URL, f"mnemosyne:claim:{proposal['proposal_id']}"))
                 if await session.get(ClaimHypothesisModel, item_id) is not None:
                     continue
                 semantics = semantic_by_proposal[str(proposal["proposal_id"])]
@@ -374,7 +374,7 @@ class ClaimHypothesisService:
         """通过框架 actor 任务调用审核模型。"""
         model_set = llm_api.get_model_set_by_task(self._model_task)
         request = llm_api.create_llm_request(
-            model_set=model_set, request_name="engram_claim_hypothesis_review"
+            model_set=model_set, request_name="mnemosyne_claim_hypothesis_review"
         )
         request.add_payload(LLMPayload(ROLE.SYSTEM, Text(
             "你是记忆审核器。只使用输入中的 Evidence ID 和文本。不要确认无来源事实。"

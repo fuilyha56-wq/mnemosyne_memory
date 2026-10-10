@@ -10,19 +10,19 @@ from unittest.mock import AsyncMock, patch
 from src.app.plugin_system.api import llm_api, prompt_api, stream_api
 from src.app.plugin_system.types import ROLE, EventType, LLMPayload, Text
 
-from ..config import EngramMemoryConfig
-from ..plugin import EngramMemoryPlugin
+from ..config import MnemosyneMemoryConfig
+from ..plugin import MnemosyneMemoryPlugin
 from ..vnext.persona_injection import REMINDER_NAME, VNextPrivatePersonaEventHandler
 
 
 async def run_example() -> None:
     """注入示例私聊印象，检查跨轮位置与唯一性，并清理内存提醒。"""
-    stream_id = "engram-persona-example"
+    stream_id = "mnemosyne-persona-example"
     impression = "他希望我叫他小树。我和他聊天时通常很放松。"
     snapshot = SimpleNamespace(
         person_id="person-example", impression_text=impression, is_current=True
     )
-    plugin: Any = EngramMemoryPlugin(EngramMemoryConfig())
+    plugin: Any = MnemosyneMemoryPlugin(MnemosyneMemoryConfig())
     plugin.runtime_owner = SimpleNamespace(
         persona_service=SimpleNamespace(
             get_persona=AsyncMock(return_value=snapshot),

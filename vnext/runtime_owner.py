@@ -1,4 +1,4 @@
-"""Engram Memory 运行时资源所有者。
+"""Mnemosyne Memory 运行时资源所有者。
 
 将记忆数据库、领域服务、派生向量索引和后台任务绑定到一个插件实例，
 供框架组件共享。
@@ -18,12 +18,13 @@ from sqlalchemy import select
 from src.app.plugin_system.api import event_api, log_api, stream_api
 
 from ..diary.runtime import DiaryRuntime
+from ..diary.store import DiaryEpisodeExportSnapshot
 from .doctor_service import DoctorService
 from .claim_service import ClaimHypothesisService
 from .decay_service import MemoryDecayService
 from .backends.neo4j import Neo4jEpisodeGraph
 from .domain import MemoryChanged
-from .episode_service import EpisodeService
+from .episode_service import DIARY_SUMMARY_SOURCE, EpisodeService
 from .backends.layersplit_store import LayerSplitStore
 from .enums import VectorIndexStatus
 from .feedforward_service import (
@@ -63,7 +64,7 @@ from .vector_service import (
 )
 
 logger = log_api.get_logger(
-    "engram_memory.vnext.runtime_owner", display="Engram 记忆", color=log_api.COLOR.CYAN
+    "mnemosyne_memory.vnext.runtime_owner", display="Mnemosyne 记忆", color=log_api.COLOR.CYAN
 )
 
 _VECTOR_WORKER_BATCH_SIZE = 30
@@ -146,20 +147,19 @@ class VNextRuntimeOwner:
 
     def __init__(self, plugin: Any) -> None:
         """根据插件配置装配 vNext 资源，但不执行外部 I/O。"""
-        from ..config import EngramMemoryConfig
+        from ..config import MnemosyneMemoryConfig
 
         self.plugin = plugin
-        if not isinstance(plugin.config, EngramMemoryConfig):
-            raise TypeError("Engram Runtime 必须使用已加载的插件配置")
-        self.config: EngramMemoryConfig = plugin.config
-        self.diary = DiaryRuntime(self.config.diary)
+        if not isinstance(plugin.config, MnemosyneMemoryConfig):
+            raise TypeError("Mnemosyne Runtime 必须使用已加载的插件配置")
+        self.config: MnemosyneMemoryConfig = plugin.config
         config = self.config
         vnext = config.vnext
         self.schema = VNextSchema(config.storage.vnext_db_path)
         self.repository = MemoryRepository(self.schema)
         self.vector_sink = ChromaVectorSink(
             db_path=config.storage.vector_db_path,
-            collection_name="engram_vnext_retrieval",
+            collection_name="mnemosyne_vnext_retrieval",
             embedding_task=DEFAULT_EMBEDDING_MODEL_TASK,
         )
         try:
@@ -167,7 +167,7 @@ class VNextRuntimeOwner:
         except Exception as error:  # noqa: BLE001
             self._embedding_model_identity = _UNAVAILABLE_EMBEDDING_MODEL_ID
             logger.warning(
-                "Embedding 模型身份不可用，先以无向量模式装配 Engram: "
+                "Embedding 模型身份不可用，先以无向量模式装配 Mnemosyne: "
                 f"{type(error).__name__}: {error}"
             )
         self.vector_backend = ChromaVectorSearchBackend(self.vector_sink, self.schema)
@@ -281,6 +281,10 @@ class VNextRuntimeOwner:
             semantic_candidate_limit=vnext.flashback.semantic_candidate_limit,
             semantic_min_similarity=vnext.flashback.semantic_min_similarity,
         )
+        self.diary = DiaryRuntime(
+            self.config.diary,
+            episode_exporter=self._export_diary_episode,
+        )
         self.proposal_service = ProposalService(self.schema)
         self.claim_service = ClaimHypothesisService(
             self.schema,
@@ -291,8 +295,8 @@ class VNextRuntimeOwner:
         )
         self.neo4j_graph: Neo4jEpisodeGraph | None = None
         if vnext.neo4j.enabled:
-            uri = os.environ.get("ENGRAM_NEO4J_URI") or vnext.neo4j.uri
-            password = os.environ.get("ENGRAM_NEO4J_PASSWORD") or vnext.neo4j.password
+            uri = os.environ.get("MNEMOSYNE_NEO4J_URI") or vnext.neo4j.uri
+            password = os.environ.get("MNEMOSYNE_NEO4J_PASSWORD") or vnext.neo4j.password
             if password:
                 self.neo4j_graph = Neo4jEpisodeGraph(
                     uri,
@@ -319,6 +323,25 @@ class VNextRuntimeOwner:
         self._consolidation_task_id: str | None = None
         self._vector_available = False
         self._vector_error: str | None = None
+
+    async def _export_diary_episode(self, export: DiaryEpisodeExportSnapshot) -> None:
+        """将聊天日记作为低置信度 SUMMARY Episode 幂等保存。"""
+        if not self._initialized:
+            raise RuntimeError("Mnemosyne Runtime 尚未就绪，保留摘要待投递")
+        async with self._sqlite_write_lock:
+            episode = await self.episode_service.record_external_episode(
+                title=f"聊天日记：{export.day}",
+                content=export.body,
+                stream_id=export.stream_id,
+                observed_at=datetime.fromtimestamp(export.through_time, UTC),
+                source_ref=export.source_ref,
+                participants=export.participants,
+                source_type=DIARY_SUMMARY_SOURCE,
+                episode_kind="SUMMARY",
+                certainty=0.35,
+                source_messages=export.source_messages,
+            )
+            await self.mirror_episode_to_graph(episode.episode_id)
 
     @property
     def vector_available(self) -> bool:
@@ -369,12 +392,12 @@ class VNextRuntimeOwner:
                     vector_service=self.vector_index,
                     embedding_model_id=embedding_identity,
                     embedding_dimension=embedding_dimension,
-                    retrieval_schema_version="engram-vnext-2",
+                    retrieval_schema_version="mnemosyne-vnext-2",
                 )
                 await self.vector_index.ensure_active_manifest(
                     embedding_identity,
                     embedding_dimension,
-                    "engram-vnext-2",
+                    "mnemosyne-vnext-2",
                 )
             except Exception as error:  # noqa: BLE001
                 self.doctor = None
@@ -406,7 +429,7 @@ class VNextRuntimeOwner:
         """发布已提交的正式记忆变化，向量投递由独立后台任务处理。"""
         self.feedforward.forget(change.memory_id)
         await event_api.publish_event(
-            "engram_memory:memory_changed",
+            "mnemosyne_memory:memory_changed",
             {"change": change},
         )
 
@@ -512,7 +535,7 @@ class VNextRuntimeOwner:
             return
         handle = create_managed_task(
             self._run_consolidation_loop(),
-            name="engram_vnext_consolidation",
+            name="mnemosyne_vnext_consolidation",
             daemon=True,
         )
         self._consolidation_task_id = handle.task_id
@@ -569,7 +592,7 @@ class VNextRuntimeOwner:
             cancel_managed_task(previous_id)
         task_info = create_managed_task(
             self._prefetch_flashback_task(stream_id, generation),
-            name=f"engram_vnext_flashback_{stream_id[:16]}",
+            name=f"mnemosyne_vnext_flashback_{stream_id[:16]}",
             daemon=True,
         )
         self._flashback_task_ids[stream_id] = task_info.task_id
@@ -654,7 +677,7 @@ class VNextRuntimeOwner:
             return
         task_info = create_managed_task(
             self._record_output_episode(message),
-            name=f"engram_episode_output_{stream_id[:16]}",
+            name=f"mnemosyne_episode_output_{stream_id[:16]}",
             daemon=True,
         )
         self._task_ids.add(task_info.task_id)
@@ -663,7 +686,7 @@ class VNextRuntimeOwner:
 
         review_task = create_managed_task(
             self._review_output_candidates(message),
-            name=f"engram_claim_review_{stream_id[:16]}",
+            name=f"mnemosyne_claim_review_{stream_id[:16]}",
             daemon=True,
         )
         self._task_ids.add(review_task.task_id)

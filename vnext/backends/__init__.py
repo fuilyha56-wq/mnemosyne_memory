@@ -1,4 +1,4 @@
-"""Engram Memory 的可选图与认知计算后端。"""
+"""Mnemosyne Memory 的可选图与认知计算后端。"""
 
 from .hopfield import ModernHopfieldMemory
 from .kda import KDAAttention

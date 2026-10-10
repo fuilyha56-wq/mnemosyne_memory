@@ -49,7 +49,7 @@ def _owner(plugin: Any) -> VNextRuntimeOwner:
 
     runtime = getattr(plugin, "runtime_owner", None)
     if not isinstance(runtime, VNextRuntimeOwner):
-        raise RuntimeError("Engram Memory 尚未初始化")
+        raise RuntimeError("Mnemosyne Memory 尚未初始化")
     return runtime
 
 
@@ -615,7 +615,7 @@ class VNextMemoryService(BaseService):
     """向其他插件提供 Episode 召回、提案和正式记忆查询门面。"""
 
     name = "memory_service"
-    description = "Engram Memory 正式记忆查询服务。"
+    description = "Mnemosyne Memory 正式记忆查询服务。"
 
     async def search(
         self, query: str, context: ToolContext, limit: int | None = None
@@ -722,7 +722,7 @@ class VNextMemoryChangedEventHandler(BaseEventHandler):
 
     name = "memory_changed"
     description = "正式记忆变化后更新其前后关联人物的印象。"
-    init_subscribe = ["engram_memory:memory_changed"]
+    init_subscribe = ["mnemosyne_memory:memory_changed"]
     timeout = 1.0
 
     async def execute(
@@ -767,7 +767,7 @@ class VNextFlashbackEventHandler(BaseEventHandler):
         if (
             "user_prompt" not in template_name
             or "sub_agent" in template_name
-            or template_name.startswith("engram_")
+            or template_name.startswith("mnemosyne_")
         ):
             return EventDecision.SUCCESS, params
         values = params.get("values")
@@ -803,7 +803,7 @@ class VNextFlashbackEventHandler(BaseEventHandler):
     ) -> None:
         """注入未被正式闪回覆盖的 Episode 工作记忆。"""
         del owner
-        name = "engram_memory_working_memory"
+        name = "mnemosyne_memory_working_memory"
         content = (
             self._working_memory_content(working_memory, formalized_episode_ids)
             if working_memory is not None
@@ -861,7 +861,7 @@ class VNextFlashbackEventHandler(BaseEventHandler):
         self, owner: VNextRuntimeOwner, stream_id: str, candidates: tuple[object, ...]
     ) -> tuple[object, ...]:
         """刷新当前版本，并移除作废或删除的聊天流闪回。"""
-        prefix = "engram_memory_flashback_"
+        prefix = "mnemosyne_memory_flashback_"
         tracked_names = self.plugin._flashback_reminder_streams.setdefault(
             stream_id, set()
         )
@@ -929,8 +929,8 @@ class VNextDoctorRouter(BaseRouter):
     """提供正式记忆及派生索引的一致性检查。"""
 
     name = "vnext_doctor"
-    description = "Engram Memory 记忆、来源与派生索引一致性检查。"
-    custom_route_path = "/api/engram-vnext"
+    description = "Mnemosyne Memory 记忆、来源与派生索引一致性检查。"
+    custom_route_path = "/api/mnemosyne-vnext"
 
     def register_endpoints(self) -> None:
         """注册只读健康检查端点。"""
@@ -946,7 +946,7 @@ class VNextDoctorRouter(BaseRouter):
                     "issues": [
                         {
                             "code": "VECTOR_INDEX_UNAVAILABLE",
-                            "object_id": "engram-vnext-vector",
+                            "object_id": "mnemosyne-vnext-vector",
                             "repairable": True,
                             "details": owner.vector_error
                             or "Embedding/Vector 派生索引尚未初始化",

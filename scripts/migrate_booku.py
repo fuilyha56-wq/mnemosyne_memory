@@ -1,4 +1,4 @@
-"""在独立目录中将 Booku SQLite 记录迁入 Engram vNext，并重建真实向量索引。
+"""在独立目录中将 Booku SQLite 记录迁入 Mnemosyne vNext，并重建真实向量索引。
 
 所有相对路径均以 Neo-MoFox 项目根目录为基准。默认先预览并要求交互确认；
 只导入记忆，跳过知识文档。--resume 仅继续独立目录的未完成索引构建。
@@ -39,7 +39,7 @@ from sqlalchemy import select, text  # noqa: E402
 
 from src.app.plugin_system.api import llm_api, person_api  # noqa: E402
 
-from ..config import EngramMemoryConfig  # noqa: E402
+from ..config import MnemosyneMemoryConfig  # noqa: E402
 from ..vnext.doctor_service import DoctorService  # noqa: E402
 from ..vnext.domain import RetrievalQuery  # noqa: E402
 from ..vnext.enums import (  # noqa: E402
@@ -73,7 +73,7 @@ from ..vnext.schema import VNextSchema  # noqa: E402
 from ..vnext.vector_service import VectorIndexService  # noqa: E402
 
 SCRIPT_VERSION = 2
-RETRIEVAL_SCHEMA_VERSION = "engram-vnext-2"
+RETRIEVAL_SCHEMA_VERSION = "mnemosyne-vnext-2"
 PERSON_REF = re.compile(r"[A-Za-z][A-Za-z0-9_.-]*:[^\s:]+\Z")
 CORE_PERSON_ID = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -136,7 +136,7 @@ def capture_source(source: Path, directory: Path) -> dict[str, str]:
                 )
     if source_fingerprints(source) != before:
         raise MigrationError("来源在复制期间变化，请停用 Booku 后重试；已有副本保留。")
-    with tempfile.TemporaryDirectory(prefix="engram-booku-read-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="mnemosyne-booku-read-") as temporary:
         recovery = Path(temporary) / "metadata.db"
         for item in raw.iterdir():
             shutil.copyfile(item, recovery.parent / item.name)
@@ -238,7 +238,7 @@ def stable_id(source_id: str, suffix: str = "") -> str:
             return str(UUID(source_id))
         except ValueError:
             pass
-    return str(uuid5(NAMESPACE_URL, f"engram:booku:{source_id}:{suffix}"))
+    return str(uuid5(NAMESPACE_URL, f"mnemosyne:booku:{source_id}:{suffix}"))
 
 
 def person_id(value: object) -> str | None:
@@ -561,7 +561,7 @@ def log_step(output: Path, event: str, **values: Any) -> None:
 
 async def build_and_check(
     output: Path,
-    config: EngramMemoryConfig,
+    config: MnemosyneMemoryConfig,
     records: list[dict[str, Any]],
     tags: dict[str, list[dict[str, Any]]],
     report: dict[str, Any],
@@ -579,7 +579,7 @@ async def build_and_check(
         report["embedding_requests"] += 1
         return original_factory(*args, **kwargs)
 
-    with tempfile.TemporaryDirectory(prefix="engram-booku-config-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="mnemosyne-booku-config-") as temporary:
         copies = Path(temporary)
         for name in ("core.toml", "model.toml"):
             original = ROOT / "config" / name
@@ -594,7 +594,7 @@ async def build_and_check(
         try:
             sink = ChromaVectorSink(
                 db_path=str(output / "chroma"),
-                request_name="engram_booku_migration_embedding",
+                request_name="mnemosyne_booku_migration_embedding",
             )
             identity, dimension = await sink.inspect_embedding_settings()
             declared = model_config.model_tasks.get_task(
@@ -760,7 +760,7 @@ def parser() -> argparse.ArgumentParser:
     )
     result.add_argument(
         "--output",
-        default="data/engram_memory/booku-import",
+        default="data/mnemosyne_memory/booku-import",
         help="全新的输出目录，相对项目根",
     )
     result.add_argument(
@@ -797,11 +797,11 @@ async def main() -> int:
         str(storage.get("vector_db_path") or "data/chroma_db/booku_memory")
     )
     output = resolve_path(args.output)
-    config_path = ROOT / "config/plugins/engram_memory/config.toml"
+    config_path = ROOT / "config/plugins/mnemosyne_memory/config.toml"
     config = (
-        EngramMemoryConfig.load(config_path, auto_update=False)
+        MnemosyneMemoryConfig.load(config_path, auto_update=False)
         if config_path.is_file()
-        else EngramMemoryConfig()
+        else MnemosyneMemoryConfig()
     )
     if not output.is_relative_to(ROOT / "data") or output == ROOT / "data":
         raise MigrationError("输出必须是项目 data 下新的独立子目录。")
@@ -815,12 +815,12 @@ async def main() -> int:
         or output.is_relative_to(active_vectors)
         or active_vectors.is_relative_to(output)
     ):
-        raise MigrationError("输出与 Booku 来源或当前 Engram 路径重叠，拒绝迁移。")
+        raise MigrationError("输出与 Booku 来源或当前 Mnemosyne 路径重叠，拒绝迁移。")
     if not source.is_file() and not args.resume:
         raise MigrationError("找不到 Booku 元数据库，请检查 --source 相对路径。")
     preview_fingerprints: dict[str, str] | None = None
     if not args.resume:
-        with tempfile.TemporaryDirectory(prefix="engram-booku-preview-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="mnemosyne-booku-preview-") as temporary:
             before = capture_source(source, Path(temporary))
             records, tags, memos, source_counts = read_records(
                 Path(temporary) / "booku.db"
@@ -830,7 +830,7 @@ async def main() -> int:
             preview_fingerprints = before
             stats = inventory(records, tags, memos, source_counts)
             statuses = stats["target_statuses"]
-            print("\nBooku → Engram 记忆迁移预览")
+            print("\nBooku → Mnemosyne 记忆迁移预览")
             print(f"待迁移记忆：{stats['records']} 条（Booku 记忆区）")
             print(
                 f"可用：{statuses.get('ACTIVE', 0)} 条；保持停用：{statuses.get('TOMBSTONED', 0)} 条"
@@ -859,7 +859,7 @@ async def main() -> int:
             f"将导入 {len(records)} 条记忆，跳过 {source_counts['knowledge_records_skipped']} 条知识文档；删除记录保持停用。"
         )
         print(
-            "原 Booku 与当前 Engram 不改动；下一步会向当前配置的 Embedding 服务发送记忆文字以生成索引。"
+            "原 Booku 与当前 Mnemosyne 不改动；下一步会向当前配置的 Embedding 服务发送记忆文字以生成索引。"
         )
         try:
             confirmed = input(

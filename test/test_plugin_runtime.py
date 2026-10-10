@@ -25,7 +25,7 @@ from src.app.plugin_system.base import BaseAction, BasePlugin
 from src.app.plugin_system.api.message_api import PersonInfo
 from src.app.plugin_system.api.storage_api import PluginDatabase
 
-from ..config import EngramMemoryConfig
+from ..config import MnemosyneMemoryConfig
 from ..diary.config import DiaryPolicy, TriggerMode
 from ..prompts import MEMORY_GUIDE_REMINDER
 from ..router import memory_admin_router as admin_router
@@ -106,7 +106,7 @@ def owner(monkeypatch: pytest.MonkeyPatch) -> VNextRuntimeOwner:
     }
     for name, resource in resources.items():
         monkeypatch.setattr(runtime_owner, name, Mock(return_value=resource))
-    return VNextRuntimeOwner(SimpleNamespace(config=EngramMemoryConfig()))
+    return VNextRuntimeOwner(SimpleNamespace(config=MnemosyneMemoryConfig()))
 
 
 @pytest.mark.parametrize("as_object", [False, True])
@@ -294,7 +294,7 @@ async def test_owner_publishes_committed_change(
         after_person_ids=("person-b",),
     )
     await owner._on_memory_changed(change)
-    publish.assert_awaited_once_with("engram_memory:memory_changed", {"change": change})
+    publish.assert_awaited_once_with("mnemosyne_memory:memory_changed", {"change": change})
     owner.persona_updater.enqueue.assert_not_awaited()  # type: ignore[attr-defined]
 
 
@@ -310,7 +310,7 @@ async def test_owner_initializes_vector_resources_once(
     owner.vector_index.ensure_active_manifest.assert_awaited_once_with(  # type: ignore[attr-defined]
         "embedding-test",
         4,
-        "engram-vnext-2",
+        "mnemosyne-vnext-2",
     )
     owner.vector_worker.start.assert_called_once()  # type: ignore[attr-defined]
     owner.persona_updater.start.assert_called_once()  # type: ignore[attr-defined]
@@ -655,12 +655,12 @@ def test_host_discovers_and_initializes_plugin(
     plugin_dir = Path(__file__).resolve().parents[1]
     source = plugin_dir
     if source_kind == "mfp":
-        release_package = os.environ.get("ENGRAM_RELEASE_PACKAGE")
+        release_package = os.environ.get("MNEMOSYNE_RELEASE_PACKAGE")
         if release_package:
             source = Path(release_package).resolve()
             assert source.is_file(), f"Release package missing: {source}"
         else:
-            source = tmp_path / "engram_memory-2.0.3.mfp"
+            source = tmp_path / "mnemosyne_memory-2.1.0.mfp"
             with zipfile.ZipFile(source, "w") as archive:
                 for path in plugin_dir.rglob("*"):
                     relative = path.relative_to(plugin_dir)
@@ -685,7 +685,7 @@ async def main():
     assert str(source) in await loader.discover_plugins(str(source.parent))
     manifest = await load_manifest(str(source))
     assert manifest is not None
-    assert manifest.version == "2.0.3"
+    assert manifest.version == "2.1.0"
     assert loader._check_version_compatibility(manifest)[0]
     configure_engine("sqlite+aiosqlite:///core.db", apply_optimizations=False)
     engine = await get_engine()
@@ -694,25 +694,25 @@ async def main():
     manager = PluginManager()
     try:
         assert await manager.load_plugin_from_manifest(str(source), manifest)
-        plugin = manager.get_plugin("engram_memory")
-        assert plugin is not None and plugin.plugin_version == "2.0.3"
+        plugin = manager.get_plugin("mnemosyne_memory")
+        assert plugin is not None and plugin.plugin_version == "2.1.0"
         owner = plugin.runtime_owner
         assert owner is not None and owner._initialized and owner.diary.ready
         assert "group_persona" in {item.name for item in plugin.get_components()}
         registry = get_global_registry()
         signatures = {
-            f"engram_memory:{item.component_type}:{item.component_name}"
+            f"mnemosyne_memory:{item.component_type}:{item.component_name}"
             for item in manifest.include
         }
         assert all(signature in registry for signature in signatures)
         assert owner.schema.database._engine is not None
-        assert await manager.unload_plugin("engram_memory")
+        assert await manager.unload_plugin("mnemosyne_memory")
         assert not any(signature in registry for signature in signatures)
         assert plugin.runtime_owner is None
         assert owner.schema.database._engine is None
     finally:
-        if manager.get_plugin("engram_memory") is not None:
-            await manager.unload_plugin("engram_memory")
+        if manager.get_plugin("mnemosyne_memory") is not None:
+            await manager.unload_plugin("mnemosyne_memory")
         await reset_engine_state()
 
 asyncio.run(main())
@@ -720,7 +720,7 @@ asyncio.run(main())
     environment = dict(os.environ)
     environment["PYTHONPATH"] = str(Path(loader.__file__).resolve().parents[3])
     environment["PYTHONIOENCODING"] = "utf-8"
-    environment.pop("ENGRAM_NEO4J_PASSWORD", None)
+    environment.pop("MNEMOSYNE_NEO4J_PASSWORD", None)
     result = subprocess.run(
         [sys.executable, "-c", script, str(source)], cwd=tmp_path,
         env=environment, capture_output=True, text=True, encoding="utf-8", timeout=60,
@@ -731,14 +731,14 @@ asyncio.run(main())
 def test_manifest_matches_runtime_components_and_current_api() -> None:
     """发布版本、组件清单与宿主版本约束保持一致。"""
     from src.app.plugin_system.api import PLUGIN_API_VERSIONS
-    from ..plugin import EngramMemoryPlugin
+    from ..plugin import MnemosyneMemoryPlugin
 
     manifest = json.loads((Path(__file__).resolve().parents[1] / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["version"] == "2.0.3"
     assert manifest["categories"] == ["tool"]
     assert manifest["min_core_version"] == "1.2.0-rc.2"
     assert all(PLUGIN_API_VERSIONS[name] == version for name, version in manifest["api_version"].items())
-    components = EngramMemoryPlugin(EngramMemoryConfig()).get_components()
+    components = MnemosyneMemoryPlugin(MnemosyneMemoryConfig()).get_components()
     assert {(item["component_type"], item["component_name"]) for item in manifest["include"]} == {
         (str(component.component_type), component.name) for component in components
     }
@@ -746,9 +746,9 @@ def test_manifest_matches_runtime_components_and_current_api() -> None:
 
 def test_plugin_registers_exact_component_graph() -> None:
     """入口仅注册预期组件，记忆 Action 满足框架文本能力声明校验。"""
-    from ..plugin import EngramMemoryPlugin
+    from ..plugin import MnemosyneMemoryPlugin
 
-    plugin = EngramMemoryPlugin(EngramMemoryConfig())
+    plugin = MnemosyneMemoryPlugin(MnemosyneMemoryConfig())
     components = plugin.get_components()
     assert {component.__name__ for component in components} == {
         "VNextMemorySearchTool",
@@ -779,7 +779,7 @@ def test_plugin_registers_exact_component_graph() -> None:
     assert names["VNextFlashbackEventHandler"] == "vnext_flashback_injector"
     assert names["VNextPrivatePersonaEventHandler"] == "private_persona"
     assert names["VNextGroupPersonaEventHandler"] == "group_persona"
-    assert isinstance(plugin.config, EngramMemoryConfig)
+    assert isinstance(plugin.config, MnemosyneMemoryConfig)
     plugin.config.plugin.enabled = False
     assert plugin.get_components() == []
 
@@ -840,7 +840,7 @@ async def test_plugin_load_refreshes_routers_and_registers_guide(
     """加载共享 Owner 后刷新已挂载路由，并注册唯一全局记忆引导语。"""
     from .. import plugin as plugin_module
 
-    plugin = plugin_module.EngramMemoryPlugin(EngramMemoryConfig())
+    plugin = plugin_module.MnemosyneMemoryPlugin(MnemosyneMemoryConfig())
     resource = SimpleNamespace(
         config=plugin.config, initialize=AsyncMock(), close=AsyncMock()
     )
@@ -858,11 +858,11 @@ async def test_plugin_load_refreshes_routers_and_registers_guide(
     assert plugin.runtime_owner is resource
     assert reload_router.await_count == 2
     assert {call.args[0] for call in reload_router.await_args_list} == {
-        f"engram_memory:router:{plugin_module.VNextDoctorRouter.name}",
-        f"engram_memory:router:{plugin_module.VNextMemoryAdminRouter.name}",
+        f"mnemosyne_memory:router:{plugin_module.VNextDoctorRouter.name}",
+        f"mnemosyne_memory:router:{plugin_module.VNextMemoryAdminRouter.name}",
     }
-    assert register_guide.call_args.kwargs["name"] == "engram_memory_guide"
-    assert isinstance(plugin.config, EngramMemoryConfig)
+    assert register_guide.call_args.kwargs["name"] == "mnemosyne_memory_guide"
+    assert isinstance(plugin.config, MnemosyneMemoryConfig)
     assert plugin.config.vnext.prompt_injection.reminder_at_end is True
     assert (
         register_guide.call_args.kwargs["insert_type"]
@@ -904,7 +904,7 @@ async def test_plugin_router_failure_closes_owner(
     """路由刷新失败时清理已初始化的 Owner，并保留原始异常。"""
     from .. import plugin as plugin_module
 
-    plugin = plugin_module.EngramMemoryPlugin(EngramMemoryConfig())
+    plugin = plugin_module.MnemosyneMemoryPlugin(MnemosyneMemoryConfig())
     resource = SimpleNamespace(
         config=plugin.config, initialize=AsyncMock(), close=AsyncMock()
     )
@@ -933,7 +933,7 @@ async def test_plugin_unload_cleans_guide_when_owner_close_fails(
     """Owner 关闭失败仍清除流闪回与全局引导语，并向调用者报错。"""
     from .. import plugin as plugin_module
 
-    plugin: Any = plugin_module.EngramMemoryPlugin(EngramMemoryConfig())
+    plugin: Any = plugin_module.MnemosyneMemoryPlugin(MnemosyneMemoryConfig())
     resource = SimpleNamespace(close=AsyncMock(side_effect=RuntimeError("owner-test")))
     plugin.runtime_owner = cast(VNextRuntimeOwner, resource)
     plugin._flashback_reminder_streams["stream-1"] = {"flashback-test"}
@@ -953,7 +953,7 @@ async def test_plugin_unload_cleans_guide_when_owner_close_fails(
         "stream-private", "actor", plugin_module.PERSONA_REMINDER_NAME
     )
     delete_stream.assert_any_call("stream-group", "actor", plugin_module.GROUP_REMINDER_NAME)
-    delete_guide.assert_called_once_with("actor", "engram_memory_guide")
+    delete_guide.assert_called_once_with("actor", "mnemosyne_memory_guide")
     assert not plugin._flashback_reminder_streams
     assert not plugin._persona_reminder_streams
     assert not plugin._group_persona_reminder_streams
@@ -962,7 +962,7 @@ async def test_plugin_unload_cleans_guide_when_owner_close_fails(
 
 def test_diary_defaults_and_independent_switches() -> None:
     """群私聊默认开启，群聊同时满足条件，关闭其中一类不影响另一类。"""
-    config = EngramMemoryConfig()
+    config = MnemosyneMemoryConfig()
     assert config.diary.group.enabled and config.diary.private.enabled
     assert config.diary.group.trigger_mode == "both"
     assert config.diary.group.interval_seconds == 10800
@@ -973,7 +973,7 @@ def test_diary_defaults_and_independent_switches() -> None:
     config.diary.group.enabled = False
     assert not config.diary.group.is_due(message_count=200, elapsed_seconds=10800)
     assert config.diary.private.is_due(message_count=100, elapsed_seconds=0)
-    restored = EngramMemoryConfig.from_dict(config.model_dump())
+    restored = MnemosyneMemoryConfig.from_dict(config.model_dump())
     assert not restored.diary.group.enabled and restored.diary.private.enabled
 
 

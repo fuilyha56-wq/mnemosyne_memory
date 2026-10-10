@@ -1,4 +1,4 @@
-"""Engram vNext 与 Neo-MoFox 内部运行能力的集中适配层。
+"""Mnemosyne vNext 与 Neo-MoFox 内部运行能力的集中适配层。
 
 现有插件公开 API 尚未覆盖任务、向量数据库、全局 Reminder 删除
 和按消息 ID 批量读取。本模块只在插件边缘封装这些只读或生命周期能力，
@@ -25,7 +25,7 @@ from src.kernel.vector_db import get_vector_db_service
 
 @dataclass(frozen=True, slots=True)
 class ManagedTaskHandle:
-    """Engram 创建的单个框架任务句柄。"""
+    """Mnemosyne 创建的单个框架任务句柄。"""
 
     task_id: str
     task: asyncio.Task[Any] | None
@@ -233,7 +233,7 @@ async def read_migration_message_candidates(
 
 
 class VectorDatabase(Protocol):
-    """Engram 派生向量适配器实际使用的最小框架协议。"""
+    """Mnemosyne 派生向量适配器实际使用的最小框架协议。"""
 
     async def add(
         self,
@@ -243,7 +243,7 @@ class VectorDatabase(Protocol):
         metadatas: list[dict[str, Any]] | None = None,
         ids: list[str] | None = None,
     ) -> None:
-        """向 Engram 专属 collection 添加派生入口。"""
+        """向 Mnemosyne 专属 collection 添加派生入口。"""
 
     async def query(
         self,
@@ -253,7 +253,7 @@ class VectorDatabase(Protocol):
         where: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> dict[str, list[Any]]:
-        """查询 Engram 专属 collection。"""
+        """查询 Mnemosyne 专属 collection。"""
 
     async def delete(
         self,
@@ -261,7 +261,7 @@ class VectorDatabase(Protocol):
         ids: list[str] | None = None,
         where: dict[str, Any] | None = None,
     ) -> None:
-        """删除 Engram 专属 collection 中指定入口。"""
+        """删除 Mnemosyne 专属 collection 中指定入口。"""
 
     async def get(
         self,
@@ -273,7 +273,7 @@ class VectorDatabase(Protocol):
         where_document: dict[str, Any] | None = None,
         include: list[str] | None = None,
     ) -> dict[str, Any]:
-        """读取 Engram 专属 collection 的派生入口。"""
+        """读取 Mnemosyne 专属 collection 的派生入口。"""
 
 
 def create_managed_task(
@@ -282,31 +282,31 @@ def create_managed_task(
     name: str,
     daemon: bool = True,
 ) -> ManagedTaskHandle:
-    """创建并返回仅属于 Engram 的受管任务句柄。"""
+    """创建并返回仅属于 Mnemosyne 的受管任务句柄。"""
     task_info = get_task_manager().create_task(coro, name=name, daemon=daemon)
     return ManagedTaskHandle(task_info.task_id, task_info.task)
 
 
 def get_managed_task(task_id: str) -> ManagedTaskHandle:
-    """按 Engram 保存的 ID 读取受管任务，不枚举或修改其他任务。"""
+    """按 Mnemosyne 保存的 ID 读取受管任务，不枚举或修改其他任务。"""
     task_info = get_task_manager().get_task(task_id)
     return ManagedTaskHandle(task_info.task_id, task_info.task)
 
 
 def cancel_managed_task(task_id: str) -> bool:
-    """精确取消一个由 Engram 保存 ID 的受管任务。"""
+    """精确取消一个由 Mnemosyne 保存 ID 的受管任务。"""
     return get_task_manager().cancel_task(task_id)
 
 
 def delete_owned_reminder(bucket: str, name: str) -> bool:
-    """只删除 Engram 自己命名空间下的一条全局 Reminder。"""
-    if not name.startswith("engram_memory_"):
-        raise ValueError("Engram reminder 名称必须使用 engram_memory_ 前缀")
+    """只删除 Mnemosyne 自己命名空间下的一条全局 Reminder。"""
+    if not name.startswith("mnemosyne_memory_"):
+        raise ValueError("Mnemosyne reminder 名称必须使用 mnemosyne_memory_ 前缀")
     return get_system_reminder_store().delete(bucket, name)
 
 
 def get_vector_database(db_path: str) -> VectorDatabase:
-    """取得供 Engram 派生索引适配器使用的框架向量服务。"""
+    """取得供 Mnemosyne 派生索引适配器使用的框架向量服务。"""
     if not db_path.strip():
         raise ValueError("db_path 不能为空")
     return cast(VectorDatabase, get_vector_db_service(db_path))

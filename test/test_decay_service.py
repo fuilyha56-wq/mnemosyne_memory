@@ -17,7 +17,7 @@ from ..vnext.schema import VNextSchema
 
 @pytest.fixture
 async def schema(tmp_path: Path):
-    """提供隔离的 Engram 数据库。"""
+    """提供隔离的 Mnemosyne 数据库。"""
     value = VNextSchema(str(tmp_path / "decay.db"))
     await value.initialize()
     try:

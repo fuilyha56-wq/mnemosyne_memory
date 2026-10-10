@@ -109,7 +109,7 @@ def _canonical_retrieval_entries(
     revisions_by_memory: dict[str, list[MemoryRevisionModel]] = {}
     for row in connection.execute(
         "SELECT revision_id, memory_id, revision_no, title, content "
-        "FROM engram_vnext_memory_revision "
+        "FROM mnemosyne_vnext_memory_revision "
         "ORDER BY memory_id, revision_no, revision_id"
     ):
         revisions_by_memory.setdefault(row["memory_id"], []).append(
@@ -124,7 +124,7 @@ def _canonical_retrieval_entries(
 
     expected: dict[tuple[str, str], tuple[str, str]] = {}
     for memory in connection.execute(
-        "SELECT memory_id, current_revision_id FROM engram_vnext_memory"
+        "SELECT memory_id, current_revision_id FROM mnemosyne_vnext_memory"
     ):
         revisions = revisions_by_memory.get(memory["memory_id"], [])
         current = next(
@@ -156,7 +156,7 @@ def _queue_vector_updates(
         return {"queued": 0, "reused": 0, "deferred_to_manifest_bootstrap": 0}
 
     active_manifest = connection.execute(
-        "SELECT embedding_model_id FROM engram_vnext_vector_index_manifest "
+        "SELECT embedding_model_id FROM mnemosyne_vnext_vector_index_manifest "
         "WHERE status='ACTIVE' ORDER BY created_at DESC LIMIT 1"
     ).fetchone()
     if active_manifest is None:
@@ -171,7 +171,7 @@ def _queue_vector_updates(
     reused = 0
     for entry_id, content_hash in entries.items():
         active_rows = connection.execute(
-            "SELECT outbox_id FROM engram_vnext_vector_outbox "
+            "SELECT outbox_id FROM mnemosyne_vnext_vector_outbox "
             "WHERE object_type='RETRIEVAL_ENTRY' AND object_id=? "
             "AND operation='UPSERT' AND status IN ('PENDING','PROCESSING','FAILED') "
             "ORDER BY updated_at DESC, created_at DESC, outbox_id",
@@ -179,11 +179,11 @@ def _queue_vector_updates(
         ).fetchall()
         if active_rows:
             connection.execute(
-                "UPDATE engram_vnext_vector_outbox SET content_hash=?, "
+                "UPDATE mnemosyne_vnext_vector_outbox SET content_hash=?, "
                 "embedding_model_id=?, index_id=NULL, status='PENDING', "
                 "attempt_count=0, claim_token=NULL, last_error=NULL, updated_at=? "
                 "WHERE outbox_id IN ("
-                "SELECT outbox_id FROM engram_vnext_vector_outbox "
+                "SELECT outbox_id FROM mnemosyne_vnext_vector_outbox "
                 "WHERE object_type='RETRIEVAL_ENTRY' AND object_id=? "
                 "AND operation='UPSERT' AND status IN ('PENDING','PROCESSING','FAILED')"
                 ")",
@@ -192,7 +192,7 @@ def _queue_vector_updates(
             reused += len(active_rows)
             continue
         connection.execute(
-            "INSERT INTO engram_vnext_vector_outbox ("
+            "INSERT INTO mnemosyne_vnext_vector_outbox ("
             "outbox_id, object_type, object_id, operation, content_hash, "
             "embedding_model_id, index_id, status, attempt_count, claim_token, "
             "last_error, created_at, updated_at"
@@ -233,13 +233,13 @@ def _migrate_preserved_copy(
     source_version: int,
 ) -> dict[str, object]:
     """扩展 v2、v3 或 v4 副本的人物审查字段，保留原始列及历史归档。"""
-    persona_table = "engram_vnext_person_persona"
+    persona_table = "mnemosyne_vnext_person_persona"
     required_tables = {
-        "engram_vnext_memory",
-        "engram_vnext_memory_revision",
-        "engram_vnext_evidence",
-        "engram_vnext_schema_version",
-        "engram_vnext_persona_update_log",
+        "mnemosyne_vnext_memory",
+        "mnemosyne_vnext_memory_revision",
+        "mnemosyne_vnext_evidence",
+        "mnemosyne_vnext_schema_version",
+        "mnemosyne_vnext_persona_update_log",
     }
     if source_version == 2:
         required_tables.add(persona_table)
@@ -262,7 +262,7 @@ def _migrate_preserved_copy(
     source_hashes = {
         table: _table_hash(old, table)
         for table in preserved_tables
-        if table != "engram_vnext_schema_version"
+        if table != "mnemosyne_vnext_schema_version"
     }
     original_columns = {
         table: tuple(
@@ -314,7 +314,7 @@ def _migrate_preserved_copy(
             raise ValueError("迁移改变了现有记忆、证据或其他表内容")
 
         version = new.execute(
-            "SELECT version FROM engram_vnext_schema_version WHERE schema_key=?",
+            "SELECT version FROM mnemosyne_vnext_schema_version WHERE schema_key=?",
             (SCHEMA_KEY,),
         ).fetchone()
         if version is None or version[0] != SCHEMA_VERSION:
@@ -359,7 +359,7 @@ def migrate_snapshot(source: Path, target: Path) -> dict[str, object]:
     with closing(sqlite3.connect(uri, uri=True)) as old:
         old.row_factory = sqlite3.Row
         version = old.execute(
-            "SELECT version FROM engram_vnext_schema_version WHERE schema_key=?",
+            "SELECT version FROM mnemosyne_vnext_schema_version WHERE schema_key=?",
             (SCHEMA_KEY,),
         ).fetchone()
         if version is None or version[0] not in {1, 2, 3, 4}:
@@ -403,7 +403,7 @@ def _migrate_v1_copy(
     finally:
         engine.dispose()
     plugin_tables = tuple(
-        table for table in source_tables if table.startswith("engram_vnext_")
+        table for table in source_tables if table.startswith("mnemosyne_vnext_")
     )
     copied: dict[str, dict[str, int]] = {}
     expected_retrieval_entries = _canonical_retrieval_entries(old)
@@ -422,7 +422,7 @@ def _migrate_v1_copy(
     retired_entries = {
         row[0]
         for row in old.execute(
-            "SELECT entry_id FROM engram_vnext_memory_retrieval_entry "
+            "SELECT entry_id FROM mnemosyne_vnext_memory_retrieval_entry "
             "WHERE entry_type IN ('ANCHOR','ANCHOR_TITLE')"
         )
     }
@@ -435,7 +435,7 @@ def _migrate_v1_copy(
         for table in plugin_tables:
             model_table = Base.metadata.tables.get(table)
             rows = old.execute(f"SELECT * FROM {_quote_identifier(table)}").fetchall()
-            if table == "engram_vnext_person_persona":
+            if table == "mnemosyne_vnext_person_persona":
                 table_sql = old.execute(
                     "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
                     (table,),
@@ -475,7 +475,7 @@ def _migrate_v1_copy(
             names = ",".join(f'"{column}"' for column in columns)
             for original in rows:
                 row = dict(original)
-                if table == "engram_vnext_persona_update_log":
+                if table == "mnemosyne_vnext_persona_update_log":
                     row.update(
                         generator_version=None,
                         revision_no=None,
@@ -483,10 +483,10 @@ def _migrate_v1_copy(
                         seen_revision_ids=None,
                     )
                 if (
-                    table == "engram_vnext_memory_retrieval_entry"
+                    table == "mnemosyne_vnext_memory_retrieval_entry"
                     and row["entry_id"] in retired_entries
                 ) or (
-                    table == "engram_vnext_vector_outbox"
+                    table == "mnemosyne_vnext_vector_outbox"
                     and row["object_id"] in retired_entries
                 ):
                     log.write(
@@ -517,12 +517,12 @@ def _migrate_v1_copy(
                         )
                         + "\n"
                     )
-                if table == "engram_vnext_schema_version":
+                if table == "mnemosyne_vnext_schema_version":
                     row.update(
                         version=SCHEMA_VERSION,
                         applied_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                     )
-                if table == "engram_vnext_memory_retrieval_entry":
+                if table == "mnemosyne_vnext_memory_retrieval_entry":
                     entry_type = row.get("entry_type")
                     if entry_type == "TAG":
                         retrieval_projection["tag_entries_preserved"] += 1
@@ -560,7 +560,7 @@ def _migrate_v1_copy(
                                 generator_version=RETRIEVAL_GENERATOR_VERSION,
                             )
                 if (
-                    table == "engram_vnext_evidence"
+                    table == "mnemosyne_vnext_evidence"
                     and row.get("claim_basis") in SOURCE_NOTES
                 ):
                     row["note"] = "\n".join(
@@ -568,11 +568,11 @@ def _migrate_v1_copy(
                             None, (row.get("note"), SOURCE_NOTES[row["claim_basis"]])
                         )
                     )
-                if table == "engram_vnext_memory_revision" and row.get(
+                if table == "mnemosyne_vnext_memory_revision" and row.get(
                     "event_start_at"
                 ):
                     for evidence in old.execute(
-                        "SELECT evidence_id FROM engram_vnext_revision_evidence "
+                        "SELECT evidence_id FROM mnemosyne_vnext_revision_evidence "
                         "WHERE revision_id=?",
                         (row["revision_id"],),
                     ):
@@ -593,8 +593,8 @@ def _migrate_v1_copy(
                             + "\n"
                         )
                 if table not in {
-                    "engram_vnext_sleep_action_operation",
-                    "engram_vnext_sleep_action_plan",
+                    "mnemosyne_vnext_sleep_action_operation",
+                    "mnemosyne_vnext_sleep_action_plan",
                 }:
                     for column in json_columns:
                         if row.get(column) is not None:
@@ -617,23 +617,23 @@ def _migrate_v1_copy(
         vector_sync = _queue_vector_updates(
             new, vector_updates, datetime.now(UTC).isoformat()
         )
-        if "engram_vnext_vector_outbox" in copied:
-            copied["engram_vnext_vector_outbox"]["after"] = new.execute(
-                "SELECT count(*) FROM engram_vnext_vector_outbox"
+        if "mnemosyne_vnext_vector_outbox" in copied:
+            copied["mnemosyne_vnext_vector_outbox"]["after"] = new.execute(
+                "SELECT count(*) FROM mnemosyne_vnext_vector_outbox"
             ).fetchone()[0]
         for revision in old.execute(
             "SELECT revision_id,event_start_at,event_end_at "
-            "FROM engram_vnext_memory_revision WHERE event_start_at IS NOT NULL"
+            "FROM mnemosyne_vnext_memory_revision WHERE event_start_at IS NOT NULL"
         ):
             note = "原记忆附带发生时间：" + revision["event_start_at"]
             if revision["event_end_at"]:
                 note += " 至 " + revision["event_end_at"]
             note += "；沿用旧记录，未经本次迁移重新验证。"
             new.execute(
-                "UPDATE engram_vnext_evidence SET note=CASE "
+                "UPDATE mnemosyne_vnext_evidence SET note=CASE "
                 "WHEN note IS NULL OR note='' THEN ? ELSE note || char(10) || ? END "
                 "WHERE evidence_id IN (SELECT evidence_id FROM "
-                "engram_vnext_revision_evidence WHERE revision_id=?)",
+                "mnemosyne_vnext_revision_evidence WHERE revision_id=?)",
                 (note, note, revision["revision_id"]),
             )
         foreign_keys = new.execute("PRAGMA foreign_key_check").fetchall()
@@ -650,7 +650,7 @@ def _migrate_v1_copy(
                 "memory_id, revision_no, parent_revision_id, title, content, created_at",
             ),
         ):
-            full = "engram_vnext_" + table
+            full = "mnemosyne_vnext_" + table
             selected = identity + ", " + fields
             diff = new.execute(
                 f"SELECT count(*) FROM (SELECT {selected} FROM original.{full} "

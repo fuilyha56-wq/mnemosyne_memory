@@ -22,7 +22,7 @@ from src.app.plugin_system.types import ROLE, LLMPayload, Text
 from .config import DiaryConfig
 from .store import Diary, DiaryStore, Progress
 
-DIARY_REQUEST_NAME = "engram_chat_diary_update"
+DIARY_REQUEST_NAME = "mnemosyne_chat_diary_update"
 DIARY_INSTRUCTIONS = """回想 target_date 这一天的聊天，过几天再接着相处时，你希望自己还记得哪些事？
 用你的第一人称和自然口吻，写下这一天值得留下的聊天回顾。
 这篇日记写的是你在这个聊天里的经历，留给自己以后接着相处时看，不是发给聊天参与者的回复。
@@ -474,12 +474,34 @@ class DiaryService:
         for row in allowed:
             if not await self.source.allowed(details, row):
                 raise RuntimeError("生成期间发言者的采集许可已变化")
+        participants: list[str] = []
+        for row in allowed:
+            person_id = str(row.get("person_id") or "").strip()
+            if person_id == "bot" or row.get("sender_role") == "bot":
+                continue
+            if not person_id and row.get("sender_id"):
+                person_id = person_api.generate_person_id(
+                    details.platform, str(row["sender_id"])
+                )
+            if person_id:
+                participants.append(person_id)
         await self.store.commit_batch(
             progress,
             through_id=end_id,
             message_id=str(batch[-1]["message_id"]),
             now=now,
             diary=diary,
+            participants=tuple(dict.fromkeys(participants)),
+            export_episode=self.config.episode_export_enabled,
+            source_messages=tuple(
+                {
+                    "message_id": str(row["message_id"]),
+                    "sender_id": str(row.get("sender_id") or ""),
+                    "person_id": str(row.get("person_id") or ""),
+                    "time": float(row["time"]),
+                }
+                for row in allowed
+            ),
         )
         return True
 
