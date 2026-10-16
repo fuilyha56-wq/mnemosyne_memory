@@ -1,6 +1,6 @@
 # Mnemosyne Memory
 
-当前市场版本为 **2.0.3**，开发分支为 `mnemosyne-memory-dev`，以主 `dev` 为基线独立开发，不再依赖 `feat/mnemosyne-memory-trial` 分支。沿用 `2.0.1` 的版本序列，误发布的 `1.1.0` 已撤下。本次补充初始化成功日志、实际组件注册及构建包加载验收，不改变数据库 Schema 或已保存的数据。
+当前开发版本为 **2.1.0**，开发分支为 `engram-memory-dev`，以主 `dev` 为基线独立开发，不再依赖 `feat/mnemosyne-memory-trial` 分支。沿用 `2.x` 版本序列，误发布的 `1.1.0` 已撤下。本次补充真正可训练的 Transformer 记忆控制器，但默认关闭学习和训练，不改变既有前馈选择或已保存的正式记忆。
 
 ## 安装与加载
 
@@ -73,6 +73,16 @@ L0 感知、L1 工作集、L2 热缓存、ACT-R/KDA 读出和 Transformer 排序
 前馈注入只作用于主聊天的 User prompt。SubAgent、Mnemosyne 日记整理、人物印象生成等内部请求会跳过前馈，避免把当前聊天的记忆再次注入后台生成上下文。私聊按当前流及准确人物范围检索；群聊只接受同一聊天流的可验证来源，不能跨群或把私聊来源带入群聊。
 
 话题切换时，最新一条输入会单独检索一次并以 `recency_weight` 参与扩散；连续被选中、但本轮最新输入并不指向的记忆按复述次数受 `inhibition_weight` 返回抑制，避免先被想起的记忆一直占据首位。
+
+### 可训练记忆控制器
+
+`vnext.learning` 使用 `torch.nn.TransformerEncoder` 读取当前线索和最多 32 个候选的冻结特征，输出召回、冲突和巩固分数。反馈样本只保存哈希文本特征、候选 ID 与标签，不保存记忆正文；正式 Memory、Revision、Evidence 和 Episode 仍由数据库保存并负责可追溯性。
+
+`vnext.learning.enabled` 是可训练 Transformer 模型总开关，默认 `false`。关闭后不初始化或调用这个模型、不训练，也不采集新的训练样本；已经保存的 checkpoint 文件和数据库记录不会删除。设为 `true` 并重启后可继续加载已有 checkpoint。当前实例默认关闭；启用后，训练任务每 300 秒最多处理 8 个 batch，累计 32 条显式反馈后开始训练，之后继续自更新。新权重、训练记录和样本消费状态在同一数据库事务中发布，失败时保留旧 checkpoint 和待训练样本。没有已训练 checkpoint 时，现有 ACT-R、KDA 与固定 Transformer 继续负责排序，随机初始化权重不会影响召回。
+
+`memory_feedback` 只接受当前流最近一轮实际展示的 Memory ID。用户明确表示记忆有帮助/无关时，用 `helpful` 或 `irrelevant` 配合正/负 `reward` 训练召回头；`conflict` 和 `consolidation` 分别提供对应控制头的监督信号。它只写训练审计数据，不会修改正式记忆。模型经训练并保存 checkpoint 后，召回分数才会以 `learned_weight` 参与前馈排序。
+
+PyTorch 是可选插件依赖。环境已安装 PyTorch 时，训练和推理可直接运行；未安装或安装失败时，插件仍会加载、继续记录训练样本并运行传统记忆检索。补装 PyTorch 并重启后即可启用训练。checkpoint 缺失或校验失败时也会回退到现有 Mnemosyne 前馈能力。
 
 ## Neo4j Episode 图
 
@@ -181,10 +191,15 @@ Doctor 提供正式记忆、版本证据、检索入口和向量索引的检查�
 | `vnext.flashback.max_memories` | `2` | 每轮闪回最多注入条数，可设为 `0`、`1`、`2` |
 | `vnext.flashback.cooldown_turns` | `3` | 同一记忆在同一聊天中的重复闪回间隔 |
 | `vnext.vector.worker_retry_limit` | `3` | 向量任务的失败重试上限 |
+| `vnext.learning.enabled` | `false` | 可训练 Transformer 总开关；开启后才会推理、训练和收集样本，保留已有 checkpoint |
+| `vnext.learning.shadow_mode` | `false`（启用总开关后生效） | 是否只记录学习输出而不改变现有召回排序 |
+| `vnext.learning.training_enabled` | `true`（启用总开关后生效） | 是否启动托管后台训练 |
+| `vnext.learning.training_interval_seconds` | `300`（当前实例） | 后台检查和自更新间隔 |
+| `vnext.learning.min_feedback_samples` | `32`（当前实例） | 首次开始训练所需的显式反馈数 |
 
 正式记忆数据库默认位于 `data/mnemosyne_memory/vnext.db`，向量索引默认位于 `data/mnemosyne_memory/chroma`。可通过 `storage.vnext_db_path` 和 `storage.vector_db_path` 调整位置。
 
-启用后，插件注册四个 Action、六个 Tool、记忆变化、闪回、私聊印象、群聊印象与聊天日记 EventHandler、记忆 Service、Doctor 与管理 Router，并维护派生向量索引。vnext 包含 `persona`、`retrieval`、`flashback`、`feedforward`、`claim_review`、`neo4j`、`prompt_injection`、`vector`；独立聊天日记使用 `diary` 节。前馈开启时替代自然闪回，关闭自动回忆须同时关闭 `vnext.feedforward.enabled` 与 `vnext.flashback.enabled`。
+启用后，插件注册四个 Action、七个 Tool、记忆变化、闪回、私聊印象、群聊印象与聊天日记 EventHandler、记忆 Service、Doctor 与管理 Router，并维护派生向量索引。vnext 包含 `persona`、`retrieval`、`flashback`、`feedforward`、`claim_review`、`neo4j`、`prompt_injection`、`vector`、`learning`；独立聊天日记使用 `diary` 节。前馈开启时替代自然闪回，关闭自动回忆须同时关闭 `vnext.feedforward.enabled` 与 `vnext.flashback.enabled`。
 
 记忆使用指引和闪回通过框架原生 `SystemReminder` 注入，不修改模型权重。指引默认随最新输入刷新；前馈开启时每轮主聊天 prompt 构建前都会尝试一次检索，选中的记忆在当前 User payload 中只保留一份；同一记忆不会反复累加。正式记忆更正或作废时，已有提醒随之更新或移除；来源隐私删除也会撤回对应提醒。提醒源在插件卸载时清理，不保证跨 Bot 重启保留；正式记忆库不受影响。向量模型或向量索引不可用时，插件仍启动并保留 SQLite 正式记忆、词法/结构化检索、Episode、日记和人物更新，前馈自动跳过向量通道；可通过 Doctor 检查定位 `VECTOR_INDEX_UNAVAILABLE`，恢复模型后重新启动插件即可重建或继续投递派生索引。前馈仍受相关性、人物/聊天流范围和耗时预算限制。
 
@@ -226,7 +241,7 @@ uv run --no-sync python -m plugins.mnemosyne_memory.examples.chat_diary
 
 ## 迁移已有 Mnemosyne 数据结构
 
-当前 Schema 为 v7，保存正式记忆、经历、候选审核与人物印象历史。升级插件后正常启动即可：初始化会自动将已知的 Schema v1 至 v6 升级至当前版本，无须手动运行脚本或切换数据库路径。迁移在运行时数据库打开、后台任务启动前完成；已经是当前版本时不重复迁移，也不创建升级备份。
+当前 Schema 为 v8，保存正式记忆、经历、候选审核、人物印象历史及可训练控制器的反馈、样本、训练运行与 checkpoint 审计。升级插件后正常启动即可：初始化会自动将已知的 Schema v1 至 v7 升级至当前版本，无须手动运行脚本或切换数据库路径。迁移在运行时数据库打开、后台任务启动前完成；已经是当前版本时不重复迁移，也不创建升级备份。
 
 自动迁移先锁定写入，并用 SQLite Backup API 保存包含已提交 WAL 数据的一致快照。备份保存在数据库同级的 `backups/` 目录，文件名包含旧 Schema 版本及唯一标识。随后在同一个 SQLite 事务内完成结构转换和版本更新，检查完整性及外键后提交。备份失败或迁移失败会停止插件加载；未提交的结构和版本更新会回滚，下一次启动仍可重试，不把半升级的数据库交给后台任务。未知版本、缺少版本记录或比当前代码更新的数据库明确拒绝，不猜测结构、不自动降级。进程退出后未提交事务由 SQLite 恢复；备份不替代正常的数据备份策略，不能保证磁盘故障或硬件损坏时绝对无损。
 
@@ -240,7 +255,13 @@ uv run --no-sync python plugins/mnemosyne_memory/scripts/migrate_schema.py --sou
 
 脚本要求交互确认，拒绝当前配置正在使用的数据库和已存在的输出文件。它与自动迁移复用转换规则，只写新副本，并核对来源未变、原始字段摘要、数据库完整性及外键。离线维护时，向量目录应另行复制并与新数据库一起切换；脚本不会操作 Bot、修改配置或切换生产库。
 
-## 从 Booku 迁移记忆
+## 从 Engram / Booku 合并迁移
+
+使用 `scripts/migrate_legacy.py` 可将 Engram 和 Booku 数据库合并进现有 Mnemosyne 库的副本，也可创建新库。脚本包含 Booku 的全部存储桶、标签及原始字段，保留 Engram 的历史版本、证据和关联；只读来源，拒绝覆盖输出，并检查正文回读、外键和数据库完整性。向量任务由启用新库后的运行时处理。
+
+参数、迁移范围和测试来源见 [数据库迁移说明](scripts/MIGRATION.md)。Engram 测试依据指定 GitHub 分支的真实表结构构造样本，该仓库没有提供实际数据库文件。
+
+## 旧 Booku 独立导入工具
 
 迁移器只把 Booku 的 `memory` bucket 导入 Mnemosyne；`knowledge` 文档片段会明确计数并跳过，不会变成正式记忆。迁移不会写入当前 Mnemosyne 或 Booku 数据库，也不会修改配置。目标目录必须是新目录，已存在时拒绝覆盖。
 

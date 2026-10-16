@@ -35,6 +35,7 @@ from .feedforward_service import (
     ChannelSettings,
     FeedForwardCue,
     FeedForwardRetrievalService,
+    FeedForwardResult,
     FeedForwardSettings,
 )
 from .flashback_service import FlashbackCandidate, FlashbackService
@@ -45,6 +46,7 @@ from .framework_bridge import (
     get_managed_task,
 )
 from .models import VectorIndexManifestModel
+from .learning.service import MemoryLearningService
 from .persona_service import PersonaService
 from .persona_updater import PersonaUpdater
 from .proposal_service import ProposalService
@@ -266,6 +268,21 @@ class VNextRuntimeOwner:
                 hot_capacity=ff.hot_capacity,
                 hot_ttl_seconds=ff.hot_ttl_seconds,
             ),
+            learning_input_dim=vnext.learning.input_dim,
+            learning_max_candidates=vnext.learning.max_candidates,
+        )
+        self.learning = MemoryLearningService(self.schema, vnext.learning)
+        self.feedforward.configure_learning(
+            enabled=lambda: self.learning.config.enabled,
+            scorer=self.learning.infer_batch,
+            active=lambda: (
+                self.learning.config.enabled
+                and self.learning.config.inference_enabled
+                and self.learning.available
+                and self.learning.trained
+                and not self.learning.config.shadow_mode
+            ),
+            weight=vnext.learning.learned_weight,
         )
         self.episode_service = EpisodeService(
             self.schema,
@@ -321,8 +338,10 @@ class VNextRuntimeOwner:
         self._sqlite_write_lock = asyncio.Lock()  # 插件级单写者锁
         self._working_memory_results: dict[str, dict[str, object]] = {}
         self._consolidation_task_id: str | None = None
+        self._learning_task_id: str | None = None
         self._vector_available = False
         self._vector_error: str | None = None
+        self._recent_learning_candidates: dict[str, dict[str, str]] = {}
 
     async def _export_diary_episode(self, export: DiaryEpisodeExportSnapshot) -> None:
         """将聊天日记作为低置信度 SUMMARY Episode 幂等保存。"""
@@ -360,6 +379,32 @@ class VNextRuntimeOwner:
         try:
             self._schema_initialized = True
             await self.schema.initialize()
+            try:
+                if self.learning.initialize():
+                    logger.info("Mnemosyne 可训练记忆控制器已启用")
+                    try:
+                        if await self.learning.load_active_checkpoint():
+                            logger.info("Mnemosyne 可训练记忆控制器已加载 active checkpoint")
+                        else:
+                            logger.info("学习控制器尚无已训练 checkpoint，将收集样本并等待反馈")
+                    except Exception as error:  # noqa: BLE001
+                        logger.warning(
+                            "学习 checkpoint 加载失败，继续使用新初始化模型: "
+                            f"{type(error).__name__}: {error}"
+                        )
+                elif self.config.vnext.learning.enabled and (
+                    self.config.vnext.learning.inference_enabled
+                    or self.config.vnext.learning.training_enabled
+                ):
+                    logger.warning(
+                        "学习控制器未启用：当前 Python 环境没有可用 PyTorch，"
+                        "仍会记录候选训练样本"
+                    )
+            except Exception as error:  # noqa: BLE001
+                logger.warning(
+                    "可训练记忆控制器初始化失败，继续使用现有前馈记忆: "
+                    f"{type(error).__name__}: {error}"
+                )
             if self.neo4j_graph is not None:
                 try:
                     await self.neo4j_graph.connect()
@@ -413,6 +458,12 @@ class VNextRuntimeOwner:
                 self._worker_started = True
                 self.vector_worker.start()
             self._initialized = True
+            if (
+                self.config.vnext.learning.enabled
+                and self.config.vnext.learning.training_enabled
+                and self.learning.available
+            ):
+                self._start_learning_loop()
             await self.diary.initialize()
             self.persona_updater.start()
             if self.config.vnext.claim_review.background_enabled:
@@ -469,10 +520,13 @@ class VNextRuntimeOwner:
         self._sqlite_write_lock = asyncio.Lock()
         self._working_memory_results.clear()
         self._consolidation_task_id = None
+        self._learning_task_id = None
         self._recent_messages.clear()
+        self._recent_learning_candidates.clear()
         self._vector_available = False
         self._vector_error = None
         self.feedforward.layers.clear()
+        self.learning.close()
         if self.neo4j_graph is not None:
             try:
                 await self.neo4j_graph.close()
@@ -542,6 +596,52 @@ class VNextRuntimeOwner:
         self._task_ids.add(handle.task_id)
         if handle.task is not None:
             self._task_ids_by_task[handle.task] = handle.task_id
+
+    def _start_learning_loop(self) -> None:
+        """启动可选的周期训练任务，任务由框架统一托管。"""
+        if self._learning_task_id is not None:
+            return
+        handle = create_managed_task(
+            self._run_learning_loop(),
+            name="mnemosyne_vnext_learning",
+            daemon=True,
+        )
+        self._learning_task_id = handle.task_id
+        self._task_ids.add(handle.task_id)
+        if handle.task is not None:
+            self._task_ids_by_task[handle.task] = handle.task_id
+
+    async def _run_learning_loop(self) -> None:
+        """立即检查待训练数据，之后按配置周期更新控制器。"""
+        interval = self.config.vnext.learning.training_interval_seconds
+        try:
+            while self._initialized:
+                for _ in range(8):
+                    try:
+                        summary = await self.learning.train_once()
+                    except Exception as error:  # noqa: BLE001
+                        logger.warning(
+                            "可训练记忆控制器训练失败: "
+                            f"{type(error).__name__}: {error}"
+                        )
+                        break
+                    if summary is None:
+                        break
+                    logger.info(
+                        f"可训练记忆控制器训练完成 run={summary.run_id} "
+                        f"samples={summary.sample_count} loss={summary.train_loss:.6f}"
+                    )
+                await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            raise
+        finally:
+            current_task = asyncio.current_task()
+            if current_task is not None:
+                task_id = self._task_ids_by_task.pop(current_task, None)
+                if task_id is not None:
+                    self._task_ids.discard(task_id)
+                    if self._learning_task_id == task_id:
+                        self._learning_task_id = None
 
     async def _run_consolidation_loop(self) -> None:
         """周期性收集并审核候选，不直接确认正式 Memory。"""
@@ -1022,6 +1122,7 @@ class VNextRuntimeOwner:
             latest_text=cue.latest_text,
         )
         result = await self.feedforward.feed_forward(cue)
+        await self._record_learning_observation(cue, result)
         return tuple(
             FlashbackCandidate(
                 memory_id=item.memory_id,
@@ -1032,3 +1133,43 @@ class VNextRuntimeOwner:
             )
             for item in result.selected
         )
+
+    async def _record_learning_observation(self, cue: FeedForwardCue, result: FeedForwardResult) -> None:
+        """Persist text-free candidate features and link feedback to this turn."""
+        self._recent_learning_candidates[cue.stream_id] = {}
+        batch = result.learning_batch
+        if batch is None or not self.config.vnext.learning.enabled:
+            return
+        try:
+            inference = result.learning_inference
+            if (
+                inference is None
+                and self.learning.available
+                and self.config.vnext.learning.inference_enabled
+            ):
+                inference = self.learning.infer_batch(batch)
+            features = batch.to_json()
+            if inference is not None:
+                features.update(
+                    {
+                        "shadow_recall": list(inference.recall),
+                        "shadow_conflict": list(inference.conflict),
+                        "shadow_consolidation": list(inference.consolidation),
+                        "model_id": inference.model_id,
+                    }
+                )
+            sample_id = await self.learning.record_training_sample(
+                stream_id=cue.stream_id,
+                candidate_ids=list(batch.candidate_ids[0]),
+                features=features,
+                labels=batch.labels_json(),
+                source="feedforward_shadow",
+            )
+            self._recent_learning_candidates[cue.stream_id] = {
+                item.memory_id: sample_id for item in result.selected
+            }
+        except Exception as error:  # noqa: BLE001
+            logger.warning(
+                f"可训练记忆控制器样本记录失败 stream={cue.stream_id}: "
+                f"{type(error).__name__}: {error}"
+            )
