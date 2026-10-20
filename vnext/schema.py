@@ -19,6 +19,10 @@ from .models import ALL_MODELS, SchemaVersionModel
 from .schema_version import SCHEMA_KEY, SCHEMA_VERSION
 
 
+class _MnemosynePluginDatabase(PluginDatabase):
+    """沿用框架统一事务管理，避免插件副本再次遗漏提交或失败 flush 的清理。"""
+
+
 def create_episode_tables(connection: sqlite3.Connection) -> None:
     """为已有 Mnemosyne 数据库追加 Episode-first 旁路表。"""
     connection.executescript(
@@ -242,7 +246,7 @@ class VNextSchema:
     def __init__(self, db_path: str) -> None:
         """创建 Schema 管理器。"""
         self._db_path = Path(db_path)
-        self.database = PluginDatabase(db_path, list(ALL_MODELS))
+        self.database = _MnemosynePluginDatabase(db_path, list(ALL_MODELS))
 
     @property
     def db_path(self) -> Path:
@@ -253,7 +257,9 @@ class VNextSchema:
         """在副本上识别已知结构，拒绝未知版本及缺少版本记录的已有库。"""
         if not self._db_path.is_file():
             return
-        with tempfile.TemporaryDirectory(prefix="mnemosyne-schema-") as directory:
+        with tempfile.TemporaryDirectory(
+            prefix="mnemosyne-schema-", dir=self._db_path.parent
+        ) as directory:
             probe = Path(directory) / "probe.db"
             shutil.copyfile(self._db_path, probe)
             for suffix in ("-wal", "-shm", "-journal"):

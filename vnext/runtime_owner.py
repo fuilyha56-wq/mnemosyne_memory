@@ -916,6 +916,8 @@ class VNextRuntimeOwner:
                     raise
                 return ()
             except Exception as error:  # noqa: BLE001
+                if self._flashback_task_ids.get(stream_id) == task_id:
+                    self._flashback_task_ids.pop(stream_id, None)
                 logger.warning(
                     f"vNext Flashback 预取失败: {type(error).__name__}: {error}"
                 )
